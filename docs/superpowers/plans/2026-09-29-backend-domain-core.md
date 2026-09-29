@@ -2790,6 +2790,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -2840,10 +2841,13 @@ class CalculateTotalReturnUseCaseTest {
         when(exchangeRateProvider.currentCopPerUsd()).thenReturn(CURRENT);
     }
 
+    // Note on stubbing: `segmentOf` consults the instrument catalog ONLY for positions held at
+    // Trii, short-circuiting everything else to USD_ASSETS. So a test whose positions are all at
+    // other brokers must not stub the catalog at all — Mockito's strict stubs would fail it.
+
     @Test
     void reportsTheAssetGainAndTheExchangeEffectAsSeparateAmounts() {
         portfolioOf(position("QQQ", "Hapi", "300.00", "400.00"));
-        catalog("QQQ", "NASDAQ");
 
         TotalReturn result = useCase().execute();
 
@@ -2862,7 +2866,6 @@ class CalculateTotalReturnUseCaseTest {
                 position("QQQ", "Hapi", "300.00", "400.00"),
                 position("EC", "Trii", "590.66", "600.00"),
                 position("TERPEL", "Trii", "100.00", "130.00"));
-        catalog("QQQ", "NASDAQ");
         catalog("EC", "NYSE");
         catalog("TERPEL", "BVC");
 
@@ -2893,7 +2896,6 @@ class CalculateTotalReturnUseCaseTest {
                 .totalInvested(Money.usd("300")).totalMarketValue(Money.usd("300"))
                 .totalUnrealizedPnl(Money.usd("0")).unpricedTickers(List.of())
                 .build());
-        catalog("QQQ", "NASDAQ");
 
         TotalReturn result = useCase().execute();
 
@@ -2903,14 +2905,27 @@ class CalculateTotalReturnUseCaseTest {
     }
 
     @Test
-    void treatsAPositionWhoseInstrumentIsNotInTheCatalogAsAUsdAsset() {
-        portfolioOf(position("SPCX", "ARQ", "150.00", "160.00"));
+    void treatsAnUncatalogedInstrumentHeldAtTriiAsAnAdrRatherThanColombian() {
+        // The catalog IS consulted here because the broker is Trii; with no entry, the position
+        // cannot be shown to trade on the BVC, so it stays dollar-denominated.
+        portfolioOf(position("SPCX", "Trii", "150.00", "160.00"));
         when(instrumentRepository.findByTicker(Ticker.of("SPCX"))).thenReturn(Optional.empty());
 
         TotalReturn result = useCase().execute();
 
         assertThat(result.segments()).extracting(ReturnSegment::segment)
+                .containsExactly(MarketSegment.TRII_ADR);
+    }
+
+    @Test
+    void treatsAnyPositionOutsideTriiAsAUsdAssetWithoutConsultingTheCatalog() {
+        portfolioOf(position("SPCX", "ARQ", "150.00", "160.00"));
+
+        TotalReturn result = useCase().execute();
+
+        assertThat(result.segments()).extracting(ReturnSegment::segment)
                 .containsExactly(MarketSegment.USD_ASSETS);
+        verifyNoInteractions(instrumentRepository);
     }
 
     @Test
@@ -3097,7 +3112,7 @@ public class CalculateTotalReturnUseCase {
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `cd backend && ./gradlew :usecase:test --tests '*CalculateTotalReturnUseCaseTest*'`
-Expected: PASS, 6 tests.
+Expected: PASS, 7 tests.
 
 - [ ] **Step 6: Commit**
 
