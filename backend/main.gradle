@@ -124,6 +124,32 @@ pitestReportAggregate {
     }
 }
 
+tasks.register('jacocoMergedCoverageVerification', JacocoCoverageVerification) {
+    dependsOn 'jacocoMergedReport'
+    additionalSourceDirs.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
+    classDirectories.setFrom files(subprojects.collectMany { subproject ->
+        subproject.sourceSets.main.output.classesDirs.files.collect { dir ->
+            fileTree(dir: dir, exclude: [
+                    '**/config/**',
+                    '**/MainApplication*',
+                    '**/*Application*'
+            ])
+        }
+    })
+    executionData.setFrom project.fileTree(dir: '.', include: '**/build/jacoco/test.exec')
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+check.dependsOn 'jacocoMergedCoverageVerification'
+
 tasks.named('wrapper') {
     gradleVersion = '9.7.1'
 }
