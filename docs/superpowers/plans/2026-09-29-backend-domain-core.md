@@ -2624,11 +2624,15 @@ public interface QuoteProvider {
 package co.com.david.inversiones.usecase.portfolio;
 
 import co.com.david.inversiones.model.*;
+import co.com.david.inversiones.model.Currency;
 import co.com.david.inversiones.model.gateways.QuoteProvider;
 import co.com.david.inversiones.model.gateways.TransactionRepository;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+// The explicit Currency import is required: java.util.Currency and the domain Currency would
+// otherwise be ambiguous, since both packages are imported on demand.
 
 /**
  * Derives the current portfolio from the transaction history and values it against market prices.
