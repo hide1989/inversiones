@@ -1819,9 +1819,9 @@ MSG
 
 **Files:**
 - Create in `domain/model/.../model/gateways/`: `TransactionRepository.java`, `InstrumentRepository.java`, `TimeProvider.java`
-- Create in `domain/model/.../model/exception/`: `UnknownInstrumentException.java`, `InvalidTradeDateException.java`
+- Create in `domain/model/.../model/exception/`: `UnknownInstrumentException.java`, `InvalidTradeDateException.java`, `InvalidTransactionUpdateException.java`
 - Create in `domain/usecase/.../usecase/transaction/`: `RegisterTransactionUseCase.java`, `UpdateTransactionUseCase.java`, `DeleteTransactionUseCase.java`, `ListTransactionsUseCase.java`, `TransactionFilter.java`
-- Test: `domain/usecase/src/test/java/co/com/david/inversiones/usecase/transaction/RegisterTransactionUseCaseTest.java`, `DeleteTransactionUseCaseTest.java`, `ListTransactionsUseCaseTest.java`
+- Test: `domain/usecase/src/test/java/co/com/david/inversiones/usecase/transaction/RegisterTransactionUseCaseTest.java`, `UpdateTransactionUseCaseTest.java`, `DeleteTransactionUseCaseTest.java`, `ListTransactionsUseCaseTest.java`
 
 **Interfaces:**
 - Consumes: `Transaction`, `Position`, `Ticker`, `Instrument` (Tasks 4–5).
@@ -1852,6 +1852,8 @@ public interface TimeProvider {
 - Produces the use cases: `RegisterTransactionUseCase.execute(Transaction) -> Transaction`, `UpdateTransactionUseCase.execute(Long id, Transaction) -> Transaction`, `DeleteTransactionUseCase.execute(Long id)`, `ListTransactionsUseCase.execute(TransactionFilter) -> List<Transaction>`, and the record `TransactionFilter(Ticker ticker, String brokerName, LocalDate from, LocalDate to)` where every field is nullable and a null field means "do not filter on it".
 
 **The rules being encoded.** A transaction can only reference a known instrument. A trade cannot be dated in the future. A sale cannot exceed the shares held at that point in the history — which is validated by replaying the whole history for that ticker and broker with the candidate included, reusing `Position.fromTransactions` rather than duplicating the arithmetic. Editing or deleting a transaction runs the same replay against the resulting history, so the record can never be left in a state that would make a position negative.
+
+An edit may not change which instrument or broker the trade belongs to. `Position.fromTransactions` replays whatever list it is handed without filtering by ticker or broker, so validating a replacement that moved to a different pair against the old pair's remaining history would replay a meaningless mixture and prove nothing about either position. Changing the instrument is not an edit of a trade — it is a deletion and a new trade — so `UpdateTransactionUseCase` rejects it outright with `InvalidTransactionUpdateException`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2170,6 +2172,22 @@ public class TransactionNotFoundException extends DomainException {
 }
 ```
 
+```java
+package co.com.david.inversiones.model.exception;
+
+import co.com.david.inversiones.model.Transaction;
+
+/** Raised when an edit would move a trade to a different instrument or broker. */
+public class InvalidTransactionUpdateException extends DomainException {
+
+    public InvalidTransactionUpdateException(Transaction existing, Transaction replacement) {
+        super("Cannot move a trade from %s at %s to %s at %s: delete it and record a new one instead"
+                .formatted(existing.ticker().symbol(), existing.brokerName(),
+                        replacement.ticker().symbol(), replacement.brokerName()));
+    }
+}
+```
+
 - [ ] **Step 4: Write the use cases**
 
 ```java
@@ -2275,6 +2293,7 @@ package co.com.david.inversiones.usecase.transaction;
 
 import co.com.david.inversiones.model.Position;
 import co.com.david.inversiones.model.Transaction;
+import co.com.david.inversiones.model.exception.InvalidTransactionUpdateException;
 import co.com.david.inversiones.model.exception.TransactionNotFoundException;
 import co.com.david.inversiones.model.gateways.TransactionRepository;
 
@@ -2282,7 +2301,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/** Replaces a trade, validating the resulting history the same way a deletion does. */
+/**
+ * Replaces a trade, validating the resulting history the same way a deletion does.
+ *
+ * <p>The instrument and broker of a trade are immutable. {@link Position#fromTransactions} replays
+ * whatever list it is handed without filtering by ticker or broker, so validating a replacement that
+ * moved to a different pair against the old pair's remaining history would replay a meaningless
+ * mixture and prove nothing about either position. Moving a trade to another instrument is a
+ * deletion plus a new trade, not an edit, so it is rejected.
+ */
 public class UpdateTransactionUseCase {
 
     private final TransactionRepository transactionRepository;
@@ -2295,6 +2322,11 @@ public class UpdateTransactionUseCase {
         Transaction existing = transactionRepository.findById(id)
                 .orElseThrow(() -> new TransactionNotFoundException(id));
 
+        if (!existing.ticker().equals(replacement.ticker())
+                || !existing.brokerName().equals(replacement.brokerName())) {
+            throw new InvalidTransactionUpdateException(existing, replacement);
+        }
+
         List<Transaction> history = new ArrayList<>(transactionRepository
                 .findByTickerAndBroker(existing.ticker(), existing.brokerName())
                 .stream()
@@ -2302,7 +2334,7 @@ public class UpdateTransactionUseCase {
                 .toList());
         history.add(replacement);
 
-        Position.fromTransactions(replacement.ticker(), replacement.brokerName(), history);
+        Position.fromTransactions(existing.ticker(), existing.brokerName(), history);
 
         return transactionRepository.save(replacement);
     }
@@ -2375,7 +2407,7 @@ public class ListTransactionsUseCase {
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `cd backend && ./gradlew :usecase:test`
-Expected: PASS, 11 tests.
+Expected: PASS, 15 tests.
 
 - [ ] **Step 6: Commit**
 
