@@ -46,6 +46,8 @@ model/
                                            Quantity quantity, Money unitPrice, Money fees, LocalDate tradedAt)
   Position                class + Builder (Ticker ticker, String brokerName, Quantity quantity,
                                            Money totalCost, Money averageCost, Money realizedPnl)
+                          + static fromTransactions(Ticker, String, List<Transaction>)
+                          + static deriveAll(List<Transaction>) -> List<Position>  // open only
   Quote                   record (Ticker ticker, Money price, Percentage dayChangePercent)
   ValuedPosition          class + Builder (Position position, Money marketValue, Money unrealizedPnl,
                                            Percentage unrealizedPnlPercent, Percentage dayChangePercent)
@@ -1385,7 +1387,9 @@ MSG
 
 **Interfaces:**
 - Consumes: `Transaction`, `Ticker`, `Quantity`, `Money` (Tasks 2–4).
-- Produces: `Position.fromTransactions(Ticker ticker, String brokerName, List<Transaction> transactions)` plus `Position.builder()` and accessors `ticker()`, `brokerName()`, `quantity()`, `totalCost()`, `averageCost()`, `realizedPnl()`, and `boolean isOpen()`.
+- Produces: `Position.fromTransactions(Ticker ticker, String brokerName, List<Transaction> transactions)`, `Position.deriveAll(List<Transaction> transactions)`, plus `Position.builder()` and accessors `ticker()`, `brokerName()`, `quantity()`, `totalCost()`, `averageCost()`, `realizedPnl()`, and `boolean isOpen()`.
+
+`deriveAll` is the **single** place that knows a holding is identified by ticker *and* broker. Tasks 7 and 10 both need "the positions implied by this transaction history", and each writing its own grouping would put that identity rule in three places. It groups by the pair, replays each group through `fromTransactions`, and returns only the open positions.
 
 **The rule being encoded.** A purchase adds to quantity and to total cost. A sale removes shares **at the current average cost**, so the average cost never changes on a sale; the difference between the sale proceeds and the cost removed becomes realized profit. This is weighted average cost accounting, and it is what makes the reported unrealized profit correct after a partial sale. Selling more than is held is an error, not a negative position.
 
@@ -1504,6 +1508,38 @@ class PositionTest {
     }
 
     @Test
+    void deriveAllGroupsByTickerAndBrokerAndKeepsOnlyOpenPositions() {
+        Ticker voo = Ticker.of("VOO");
+        Transaction qqqHapi = trade(TransactionType.BUY, "2", "100.00", 1);
+        Transaction qqqArq = Transaction.builder()
+                .ticker(QQQ).brokerName("ARQ").type(TransactionType.BUY)
+                .quantity(Quantity.of("1")).unitPrice(Money.usd("120.00"))
+                .tradedAt(LocalDate.of(2026, 6, 1)).build();
+        Transaction vooBuy = Transaction.builder()
+                .ticker(voo).brokerName(HAPI).type(TransactionType.BUY)
+                .quantity(Quantity.of("1")).unitPrice(Money.usd("598.11"))
+                .tradedAt(LocalDate.of(2026, 6, 1)).build();
+        Transaction vooSellAll = Transaction.builder()
+                .ticker(voo).brokerName(HAPI).type(TransactionType.SELL)
+                .quantity(Quantity.of("1")).unitPrice(Money.usd("610.00"))
+                .tradedAt(LocalDate.of(2026, 6, 2)).build();
+
+        List<Position> positions =
+                Position.deriveAll(List.of(qqqHapi, qqqArq, vooBuy, vooSellAll));
+
+        assertThat(positions).hasSize(2);
+        assertThat(positions).allMatch(Position::isOpen);
+        assertThat(positions)
+                .extracting(position -> position.ticker().symbol() + "@" + position.brokerName())
+                .containsExactlyInAnyOrder("QQQ@Hapi", "QQQ@ARQ");
+    }
+
+    @Test
+    void deriveAllOnAnEmptyHistoryProducesNoPositions() {
+        assertThat(Position.deriveAll(List.of())).isEmpty();
+    }
+
+    @Test
     void anEmptyTransactionListProducesAClosedPositionAtZeroCost() {
         Position position = Position.fromTransactions(QQQ, HAPI, List.of());
 
@@ -1542,7 +1578,9 @@ package co.com.david.inversiones.model;
 import co.com.david.inversiones.model.exception.InsufficientPositionException;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -1619,8 +1657,34 @@ public final class Position {
                 .build();
     }
 
+    /**
+     * Every open holding implied by a transaction history.
+     *
+     * <p>A holding is identified by ticker <em>and</em> broker: the same instrument bought at two
+     * brokers has two independent cost bases. This method is the single place that knows that rule,
+     * so callers never group transactions themselves. Fully sold holdings are omitted.
+     */
+    public static List<Position> deriveAll(List<Transaction> transactions) {
+        Map<PositionKey, List<Transaction>> grouped = new LinkedHashMap<>();
+        for (Transaction transaction : transactions) {
+            grouped.computeIfAbsent(
+                            new PositionKey(transaction.ticker(), transaction.brokerName()),
+                            key -> new java.util.ArrayList<>())
+                    .add(transaction);
+        }
+        return grouped.entrySet().stream()
+                .map(entry -> fromTransactions(
+                        entry.getKey().ticker(), entry.getKey().brokerName(), entry.getValue()))
+                .filter(Position::isOpen)
+                .toList();
+    }
+
     private static Money averageCostOf(Money totalCost, Quantity quantity, Currency currency) {
         return quantity.isZero() ? Money.zero(currency) : totalCost.divide(quantity.value());
+    }
+
+    /** Identity of a holding: ticker plus broker, since each broker carries its own cost basis. */
+    private record PositionKey(Ticker ticker, String brokerName) {
     }
 
     /** Whether any shares are still held. */
@@ -1705,7 +1769,7 @@ public final class Position {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd backend && ./gradlew :model:test --tests '*PositionTest*'`
-Expected: PASS, 8 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1718,7 +1782,8 @@ Replay trades in date order to compute quantity, weighted average cost
 and realized profit. A sale removes shares at the prevailing average
 cost, which keeps unrealized profit correct after a partial sale, and
 selling more than is held is rejected rather than producing a negative
-position.
+position. Expose deriveAll as the single place that knows a holding is
+identified by ticker and broker together.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 MSG
@@ -2513,9 +2578,9 @@ import java.util.stream.Collectors;
 /**
  * Derives the current portfolio from the transaction history and values it against market prices.
  *
- * <p>Positions are keyed by ticker and broker, because the same instrument held at two brokers has
- * two independent cost bases. A position whose quote is unavailable is carried at cost and reported
- * in {@link PortfolioValuation#unpricedTickers()} rather than being dropped or valued at a guess.
+ * <p>Position identity is owned by {@link Position#deriveAll(java.util.List)}. A position whose
+ * quote is unavailable is carried at cost and reported in
+ * {@link PortfolioValuation#unpricedTickers()} rather than being dropped or valued at a guess.
  */
 public class GetPortfolioUseCase {
 
@@ -2528,14 +2593,7 @@ public class GetPortfolioUseCase {
     }
 
     public PortfolioValuation execute() {
-        List<Position> openPositions = transactionRepository.findAll().stream()
-                .collect(Collectors.groupingBy(transaction ->
-                        new PositionKey(transaction.ticker(), transaction.brokerName())))
-                .entrySet().stream()
-                .map(entry -> Position.fromTransactions(
-                        entry.getKey().ticker(), entry.getKey().brokerName(), entry.getValue()))
-                .filter(Position::isOpen)
-                .toList();
+        List<Position> openPositions = Position.deriveAll(transactionRepository.findAll());
 
         Set<Ticker> tickers = openPositions.stream()
                 .map(Position::ticker)
@@ -2596,10 +2654,6 @@ public class GetPortfolioUseCase {
                 .dayChangePercent(quote.dayChangePercent())
                 .priced(true)
                 .build();
-    }
-
-    /** Identity of a holding: the same instrument at two brokers has two independent cost bases. */
-    private record PositionKey(Ticker ticker, String brokerName) {
     }
 }
 ```
@@ -3764,13 +3818,7 @@ public class GetSignalsDashboardUseCase {
     }
 
     private Set<Ticker> heldTickers() {
-        return transactionRepository.findAll().stream()
-                .collect(Collectors.groupingBy(transaction ->
-                        List.of(transaction.ticker(), transaction.brokerName())))
-                .values().stream()
-                .map(group -> Position.fromTransactions(
-                        group.getFirst().ticker(), group.getFirst().brokerName(), group))
-                .filter(Position::isOpen)
+        return Position.deriveAll(transactionRepository.findAll()).stream()
                 .map(Position::ticker)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
@@ -3837,13 +3885,7 @@ public class RefreshSignalSnapshotUseCase {
 
     /** @return how many snapshots were stored */
     public int execute() {
-        Set<Ticker> held = transactionRepository.findAll().stream()
-                .collect(Collectors.groupingBy(transaction ->
-                        List.of(transaction.ticker(), transaction.brokerName())))
-                .values().stream()
-                .map(group -> Position.fromTransactions(
-                        group.getFirst().ticker(), group.getFirst().brokerName(), group))
-                .filter(Position::isOpen)
+        Set<Ticker> held = Position.deriveAll(transactionRepository.findAll()).stream()
                 .map(Position::ticker)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
