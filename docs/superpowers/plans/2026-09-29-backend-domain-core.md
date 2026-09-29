@@ -3331,6 +3331,35 @@ class SignalSnapshotTest {
     }
 
     @Test
+    void theBuilderNeverMutatesACallerSuppliedMap() {
+        Map<SignalSource, BigDecimal> callerMap = new HashMap<>();
+        callerMap.put(SignalSource.TECHNICAL, new BigDecimal("8"));
+
+        SignalSnapshot snapshot = SignalSnapshot.builder()
+                .ticker(Ticker.of("NU")).snapshotDate(LocalDate.of(2026, 9, 29))
+                .scores(callerMap)
+                .score(SignalSource.NEWS, new BigDecimal("6"))
+                .build();
+
+        assertThat(callerMap).containsOnlyKeys(SignalSource.TECHNICAL);
+        assertThat(snapshot.availableSources())
+                .containsExactlyInAnyOrder(SignalSource.TECHNICAL, SignalSource.NEWS);
+    }
+
+    @Test
+    void dropsANullSourceKeyInsteadOfRejectingTheMap() {
+        Map<SignalSource, BigDecimal> withNullKey = new HashMap<>();
+        withNullKey.put(null, new BigDecimal("9"));
+        withNullKey.put(SignalSource.TECHNICAL, new BigDecimal("8"));
+
+        SignalSnapshot snapshot = SignalSnapshot.builder()
+                .ticker(Ticker.of("NU")).snapshotDate(LocalDate.of(2026, 9, 29))
+                .scores(withNullKey).build();
+
+        assertThat(snapshot.availableSources()).containsExactly(SignalSource.TECHNICAL);
+    }
+
+    @Test
     void isImmutableAgainstLaterChangesToTheSourceMap() {
         Map<SignalSource, BigDecimal> scores = new HashMap<>();
         scores.put(SignalSource.TECHNICAL, new BigDecimal("8"));
@@ -3501,14 +3530,23 @@ public final class SignalSnapshot {
             return this;
         }
 
+        /**
+         * Replaces the accumulated scores.
+         *
+         * <p>Copies the argument: the builder never holds a reference to a caller's collection, so
+         * a later {@link #score(SignalSource, BigDecimal)} cannot mutate it. A {@link LinkedHashMap}
+         * is used rather than an {@link EnumMap} because the copy must tolerate a null key, which
+         * the constructor drops rather than rejecting.
+         */
         public Builder scores(Map<SignalSource, BigDecimal> scores) {
-            this.scores = scores;
+            this.scores = scores == null ? null : new LinkedHashMap<>(scores);
             return this;
         }
 
+        /** Adds or replaces one source's score. */
         public Builder score(SignalSource source, BigDecimal score) {
             if (this.scores == null) {
-                this.scores = new EnumMap<>(SignalSource.class);
+                this.scores = new LinkedHashMap<>();
             }
             this.scores.put(source, score);
             return this;
@@ -3573,7 +3611,7 @@ public record CombinedScore(BigDecimal value, SignalLevel level, Set<SignalSourc
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && ./gradlew :model:test`
-Expected: PASS, 18 new tests.
+Expected: PASS, 20 new tests.
 
 - [ ] **Step 5: Commit**
 
