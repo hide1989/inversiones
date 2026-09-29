@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -50,9 +50,7 @@ class CalculateTotalReturnUseCaseTest {
     }
 
     private void catalog(String ticker, String exchange) {
-        // lenient: the use case only queries the catalog for positions at broker Trii, so this
-        // stub is unused (and would trip strict stubbing) for positions at other brokers.
-        lenient().when(instrumentRepository.findByTicker(Ticker.of(ticker))).thenReturn(Optional.of(
+        when(instrumentRepository.findByTicker(Ticker.of(ticker))).thenReturn(Optional.of(
                 Instrument.builder().ticker(Ticker.of(ticker)).name(ticker)
                         .type(InstrumentType.EQUITY).sector("Any").exchange(exchange)
                         .currency(Currency.USD).build()));
@@ -67,10 +65,12 @@ class CalculateTotalReturnUseCaseTest {
         when(exchangeRateProvider.currentCopPerUsd()).thenReturn(CURRENT);
     }
 
+    // Note on stubbing: `segmentOf` consults the instrument catalog ONLY for positions held at
+    // Trii, short-circuiting everything else to USD_ASSETS. So a test whose positions are all at
+    // other brokers must not stub the catalog at all — Mockito's strict stubs would fail it.
     @Test
     void reportsTheAssetGainAndTheExchangeEffectAsSeparateAmounts() {
         portfolioOf(position("QQQ", "Hapi", "300.00", "400.00"));
-        catalog("QQQ", "NASDAQ");
 
         TotalReturn result = useCase().execute();
 
@@ -89,7 +89,6 @@ class CalculateTotalReturnUseCaseTest {
                 position("QQQ", "Hapi", "300.00", "400.00"),
                 position("EC", "Trii", "590.66", "600.00"),
                 position("TERPEL", "Trii", "100.00", "130.00"));
-        catalog("QQQ", "NASDAQ");
         catalog("EC", "NYSE");
         catalog("TERPEL", "BVC");
 
@@ -120,7 +119,6 @@ class CalculateTotalReturnUseCaseTest {
                 .totalInvested(Money.usd("300")).totalMarketValue(Money.usd("300"))
                 .totalUnrealizedPnl(Money.usd("0")).unpricedTickers(List.of())
                 .build());
-        catalog("QQQ", "NASDAQ");
 
         TotalReturn result = useCase().execute();
 
@@ -130,14 +128,27 @@ class CalculateTotalReturnUseCaseTest {
     }
 
     @Test
-    void treatsAPositionWhoseInstrumentIsNotInTheCatalogAsAUsdAsset() {
+    void treatsAnUncatalogedInstrumentHeldAtTriiAsAnAdrRatherThanColombian() {
+        // The catalog IS consulted here because the broker is Trii; with no entry, the position
+        // cannot be shown to trade on the BVC, so it stays dollar-denominated.
+        portfolioOf(position("SPCX", "Trii", "150.00", "160.00"));
+        when(instrumentRepository.findByTicker(Ticker.of("SPCX"))).thenReturn(Optional.empty());
+
+        TotalReturn result = useCase().execute();
+
+        assertThat(result.segments()).extracting(ReturnSegment::segment)
+                .containsExactly(MarketSegment.TRII_ADR);
+    }
+
+    @Test
+    void treatsAnyPositionOutsideTriiAsAUsdAssetWithoutConsultingTheCatalog() {
         portfolioOf(position("SPCX", "ARQ", "150.00", "160.00"));
-        lenient().when(instrumentRepository.findByTicker(Ticker.of("SPCX"))).thenReturn(Optional.empty());
 
         TotalReturn result = useCase().execute();
 
         assertThat(result.segments()).extracting(ReturnSegment::segment)
                 .containsExactly(MarketSegment.USD_ASSETS);
+        verifyNoInteractions(instrumentRepository);
     }
 
     @Test
