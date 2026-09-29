@@ -23,8 +23,8 @@ public final class Transaction {
     private Transaction(Builder builder) {
         this.id = builder.id;
         this.ticker = Objects.requireNonNull(builder.ticker, "ticker must not be null");
-        this.type = Objects.requireNonNull(builder.type, "type must not be null");
         this.brokerName = Objects.requireNonNull(builder.brokerName, "brokerName must not be null");
+        this.type = Objects.requireNonNull(builder.type, "type must not be null");
         this.quantity = Objects.requireNonNull(builder.quantity, "quantity must not be null");
         this.unitPrice = Objects.requireNonNull(builder.unitPrice, "unitPrice must not be null");
         this.tradedAt = Objects.requireNonNull(builder.tradedAt, "tradedAt must not be null");
