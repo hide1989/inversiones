@@ -92,9 +92,14 @@ lo que n8n no da: dominio probado, persistencia, histórico y una sola frontera 
 
 ### ADR-005 · Java 25 con Spring Boot 4.0
 
-Spring Boot 4.0 (noviembre 2025) tiene soporte de primera clase para Java 25 manteniendo Java 17 como
-baseline. Riesgo conocido: el plugin de Bancolombia puede no aceptar aún `--javaVersion=VERSION_25`;
-ver mitigación en la fase 0.
+**Verificado en la fase 0 (2026-09-29):** el plugin `co.com.bancolombia.cleanArchitecture` **4.6.2**
+acepta `--java-version=25` de forma nativa y genera un proyecto con **Spring Boot 4.1.1**, Gradle 9.7.1,
+JaCoCo 0.8.15 y PIT 1.30.0, con `JavaLanguageVersion.of(25)` en el toolchain. `./gradlew build` pasa en
+verde. El riesgo queda descartado.
+
+Salvedad de arranque: el Gradle 8.13 del sistema **no puede** ejecutarse sobre Java 25 (falla con
+`Unsupported class file major version 69` al compilar los scripts Groovy). El wrapper se genera una sola
+vez apuntando `JAVA_HOME` a JDK 21; a partir de ahí todo corre con `./gradlew` sobre Java 25.
 
 ---
 
@@ -136,25 +141,36 @@ Convenciones (obligatorias en todas las fases):
 
 ### 4.1 Generación con el scaffold
 
+Comandos exactos, verificados contra el plugin 4.6.2 en la fase 0:
+
 ```bash
 mkdir -p backend && cd backend
-gradle init --type basic --dsl groovy --project-name inversiones
-# plugin co.com.bancolombia.cleanArchitecture en build.gradle
+# settings.gradle + build.gradle con el plugin, luego bootstrap del wrapper con JDK 21
+JAVA_HOME=/Users/David/Library/Java/JavaVirtualMachines/ms-21.0.10/Contents/Home \
+  gradle wrapper --gradle-version 9.8.0
 
-gradle ca \
+./gradlew ca \
   --package=co.com.david.inversiones \
-  --type=imperative \
+  --type=IMPERATIVE \
   --name=inversiones \
-  --javaVersion=VERSION_25 \
-  --lombok=true \
-  --metrics=true
+  --java-version=25 \
+  --lombok=TRUE \
+  --metrics=TRUE \
+  --mutation=TRUE
 
-gradle gda --type=jpa
-gradle gda --type=restconsumer
-gradle gep --type=restmvc
-gradle gm  --name=Transaction
-gradle guc --name=RegisterTransaction
+./gradlew gda --type=JPA
+./gradlew gda --type=RESTCONSUMER
+./gradlew gep --type=RESTMVC
+./gradlew gm  --name=Transaction
+./gradlew guc --name=RegisterTransaction
 ```
+
+Nota sobre la API del plugin 4.x: las opciones son `--java-version` (valores `17|21|25`) y `--type` en
+mayúsculas (`IMPERATIVE|REACTIVE`), no `--javaVersion=VERSION_xx` como en la serie 3.x. El plugin fija
+por su cuenta el wrapper en Gradle 9.7.1 al generar el proyecto.
+
+`--mutation=TRUE` deja configurado PIT mutation testing. Se genera porque viene gratis con el scaffold,
+pero **no** se impone un umbral de mutación como gate del pipeline: el gate obligatorio es JaCoCo 80%.
 
 ### 4.2 Módulos
 
@@ -425,10 +441,14 @@ dispara Jenkins con `vercel deploy --prod --token=$VERCEL_TOKEN` para mantener u
 `deployment/Dockerfile` multi-stage: `eclipse-temurin:25-jdk` para compilar, `eclipse-temurin:25-jre`
 para ejecutar, usuario no root, `HEALTHCHECK` contra `/actuator/health`, `-XX:MaxRAMPercentage=75`.
 
-`deploy/docker-compose.prod.yml` levanta `postgres:17-alpine` con volumen persistente, el backend, y
-Nginx como reverse proxy con TLS de Let's Encrypt, en la misma red que n8n. CORS restringido al dominio
-de Vercel. Secretos en `.env` en el VPS (permisos 600) y en el almacén de credenciales de Jenkins;
-nunca en Git. Respaldo diario de Postgres con `pg_dump` por cron.
+`deploy/docker-compose.prod.yml` levanta `postgres:17-alpine` con volumen persistente y el backend.
+
+**Verificado en la fase 0:** el VPS ya corre `n8n-traefik-1`. En lugar de añadir un Nginx propio, el
+backend se une a la red de ese Traefik y expone su ruta con labels, heredando el TLS de Let's Encrypt
+ya configurado. Una pieza menos de infraestructura y un certificado menos que renovar.
+
+CORS restringido al dominio de Vercel. Secretos en `.env` en el VPS (permisos 600) y en el almacén de
+credenciales de Jenkins; nunca en Git. Respaldo diario de Postgres con `pg_dump` por cron.
 
 ### 7.3 Pipeline de Jenkins
 
@@ -467,7 +487,7 @@ las revisiones de arquitectura van con Opus.
 
 | # | Fase | Entregable | Verificación |
 |---|---|---|---|
-| 0 | Verificación de entorno | Informe de viabilidad | `java -version` = 25; `gradle ca --javaVersion=VERSION_25` acepta el valor; Docker y Compose disponibles; RAM y disco libres del VPS; n8n responde |
+| 0 | ✅ Verificación de entorno | Informe de viabilidad | **Hecha el 2026-09-29.** Java 25.0.4 · plugin 4.6.2 con `--java-version=25` · Spring Boot 4.1.1 · `build` en verde · n8n HTTP 200 en 1,15 s · Node 22.14 · VPS 8 GB/5 GB libres, 2 CPU, Docker 29.2.1 con Traefik ya activo. Pendiente del usuario: **levantar Docker Desktop** en el Mac (requerido desde la fase 5) |
 | 1 | Scaffold y monorepo | `backend/` generado, `.gitignore`, `README.md`, ADR-001…005 | `gradle build` y `gradle validateStructure` en verde |
 | 2 | Dominio: value objects y puertos | `domain/model` completo | Pruebas JUnit 5 de value objects; `domain` sin dependencias de framework |
 | 3 | Casos de uso de portafolio | Transacciones, posiciones, P&L, retorno total | Pruebas con Mockito, incluido el efecto cambiario en 3 segmentos |
@@ -481,7 +501,7 @@ las revisiones de arquitectura van con Opus.
 | 11 | Autenticación del frontend | Login, guardia de rutas, cliente de API con Zod | Vitest + MSW: login correcto, credenciales inválidas, expiración |
 | 12 | Vistas del dashboard | Las 8 vistas, incluido el CRUD de transacciones | Vitest + MSW por vista; estados de carga, error y vacío |
 | 13 | Playwright | Page objects, fixtures, flujos y accesibilidad | Suite en verde en Chromium y WebKit |
-| 14 | Contenedores | Dockerfile, `docker-compose.prod.yml`, Nginx | Stack arriba en local; health check en verde; aceptación contra el stack |
+| 14 | Contenedores | Dockerfile, `docker-compose.prod.yml`, labels de Traefik | Stack arriba en local; health check en verde; aceptación contra el stack |
 | 15 | Jenkins | `Jenkinsfile`, Jenkins con JCasC, credenciales | Pipeline completo en verde en local con `DEPLOY_TARGET=local` |
 | 16 | Despliegue | Frontend en Vercel, backend en el VPS | Pipeline en verde con `DEPLOY_TARGET=vps`; smoke test contra producción |
 
@@ -491,8 +511,10 @@ las revisiones de arquitectura van con Opus.
 
 | Riesgo | Impacto | Mitigación |
 |---|---|---|
-| El plugin de Bancolombia no acepta `VERSION_25` | Bloquea la fase 1 | Generar con `VERSION_21` y subir el toolchain a 25 en `build.gradle`. Spring Boot 4.0 soporta Java 25 con baseline 17. Se verifica en la fase 0 |
-| RAM insuficiente en el VPS (JVM + Postgres + n8n necesitan ≥2 GB) | Bloquea la fase 16 | Medir en la fase 0. Si no alcanza: Postgres al free tier de Neon y solo la JVM en el VPS, con `MaxRAMPercentage` ajustado |
+| ~~El plugin no acepta Java 25~~ | — | **Descartado en la fase 0:** el plugin 4.6.2 acepta `--java-version=25` nativamente |
+| ~~RAM insuficiente en el VPS~~ | — | **Descartado en la fase 0:** el VPS tiene 8 GB con 5 GB disponibles, 80 GB de disco libres y 2 CPU |
+| El Gradle del sistema (8.13) no corre sobre Java 25 | Bloquea la fase 1 | Bootstrap del wrapper con JDK 21 una sola vez; después todo con `./gradlew`. Documentado en §4.1 |
+| Solo 2 CPU en el VPS: la suite de Playwright en el pipeline puede ser lenta | Pipeline lento | Playwright corre en el agente de Jenkins, no en el contenedor de producción; `workers: 2` y solo Chromium en el smoke test |
 | Cambios de contrato en las respuestas de n8n | Rompe el adaptador en silencio | Fixtures capturados de respuestas reales, deserialización tolerante a campos desconocidos, y validación con Zod también en el frontend |
 | La síntesis IA tarda ~55 s | Timeouts en la primera carga | n8n ya sirve desde caché en `staticData`; el backend añade su propia caché y sirve el último snapshot persistido como respaldo |
 | Jenkins local no recibe webhooks de GitHub | CI lento en desarrollo | Polling de SCM en local; webhook solo en el VPS |
