@@ -36,4 +36,10 @@ class TickerTest {
     void rejectsNull() {
         assertThatThrownBy(() -> Ticker.of(null)).isInstanceOf(InvalidTickerException.class);
     }
+
+    @Test
+    void theCanonicalConstructorNormalizesAndValidatesToo() {
+        assertThat(new Ticker(" tsla ")).isEqualTo(Ticker.of("TSLA"));
+        assertThatThrownBy(() -> new Ticker("TS LA")).isInstanceOf(InvalidTickerException.class);
+    }
 }
