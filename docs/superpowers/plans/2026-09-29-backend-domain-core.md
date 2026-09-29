@@ -970,6 +970,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TransactionTest {
 
     private static final LocalDate TRADED_AT = LocalDate.of(2026, 6, 30);
+    private static final String HAPI_BROKER = "Hapi";
 
     private static Transaction.Builder buy() {
         return Transaction.builder()
@@ -1019,8 +1020,21 @@ class TransactionTest {
     }
 
     @Test
-    void rejectsAMissingRequiredField() {
+    void rejectsABuilderMissingEveryFieldButTheTicker() {
         assertThatThrownBy(() -> Transaction.builder().ticker(Ticker.of("QQQ")).build())
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void namesTheMissingFieldWhenExactlyOneIsAbsent() {
+        // Order-independent: every other field is supplied, so only `type` can be reported.
+        assertThatThrownBy(() -> Transaction.builder()
+                .ticker(Ticker.of("QQQ"))
+                .brokerName(HAPI_BROKER)
+                .quantity(Quantity.of("1"))
+                .unitPrice(Money.usd("600.00"))
+                .tradedAt(TRADED_AT)
+                .build())
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("type");
     }
