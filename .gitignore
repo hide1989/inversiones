@@ -1,0 +1,33 @@
+# Gradle
+backend/.gradle/
+backend/build/
+backend/*/build/
+backend/*/*/build/
+backend/build-cache/
+backend/.kotlin/
+
+# Java
+*.class
+*.jar
+!backend/gradle/wrapper/gradle-wrapper.jar
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.vercel/
+
+# Secrets
+.env
+.env.*
+!.env.template
+deploy/.env
+jenkins/casc/secrets/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
