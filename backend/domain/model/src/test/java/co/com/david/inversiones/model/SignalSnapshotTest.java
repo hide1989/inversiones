@@ -41,4 +41,33 @@ class SignalSnapshotTest {
         assertThatThrownBy(() -> snapshot.scores().put(SignalSource.NEWS, BigDecimal.ONE))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
+
+    @Test
+    void theBuilderNeverMutatesACallerSuppliedMap() {
+        Map<SignalSource, BigDecimal> callerMap = new HashMap<>();
+        callerMap.put(SignalSource.TECHNICAL, new BigDecimal("8"));
+
+        SignalSnapshot snapshot = SignalSnapshot.builder()
+                .ticker(Ticker.of("NU")).snapshotDate(LocalDate.of(2026, 9, 29))
+                .scores(callerMap)
+                .score(SignalSource.NEWS, new BigDecimal("6"))
+                .build();
+
+        assertThat(callerMap).containsOnlyKeys(SignalSource.TECHNICAL);
+        assertThat(snapshot.availableSources())
+                .containsExactlyInAnyOrder(SignalSource.TECHNICAL, SignalSource.NEWS);
+    }
+
+    @Test
+    void dropsANullSourceKeyInsteadOfRejectingTheMap() {
+        Map<SignalSource, BigDecimal> withNullKey = new HashMap<>();
+        withNullKey.put(null, new BigDecimal("9"));
+        withNullKey.put(SignalSource.TECHNICAL, new BigDecimal("8"));
+
+        SignalSnapshot snapshot = SignalSnapshot.builder()
+                .ticker(Ticker.of("NU")).snapshotDate(LocalDate.of(2026, 9, 29))
+                .scores(withNullKey).build();
+
+        assertThat(snapshot.availableSources()).containsExactly(SignalSource.TECHNICAL);
+    }
 }

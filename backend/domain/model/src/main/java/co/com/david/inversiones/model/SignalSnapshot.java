@@ -74,14 +74,23 @@ public final class SignalSnapshot {
             return this;
         }
 
+        /**
+         * Replaces the accumulated scores.
+         *
+         * <p>Copies the argument: the builder never holds a reference to a caller's collection, so
+         * a later {@link #score(SignalSource, BigDecimal)} cannot mutate it. A {@link LinkedHashMap}
+         * is used rather than an {@link EnumMap} because the copy must tolerate a null key, which
+         * the constructor drops rather than rejecting.
+         */
         public Builder scores(Map<SignalSource, BigDecimal> scores) {
-            this.scores = scores;
+            this.scores = scores == null ? null : new LinkedHashMap<>(scores);
             return this;
         }
 
+        /** Adds or replaces one source's score. */
         public Builder score(SignalSource source, BigDecimal score) {
             if (this.scores == null) {
-                this.scores = new EnumMap<>(SignalSource.class);
+                this.scores = new LinkedHashMap<>();
             }
             this.scores.put(source, score);
             return this;
