@@ -6,7 +6,7 @@ import co.com.david.inversiones.model.Quantity;
 import co.com.david.inversiones.model.Ticker;
 import co.com.david.inversiones.model.Transaction;
 import co.com.david.inversiones.model.TransactionType;
-import co.com.david.inversiones.model.exception.UnknownInstrumentException;
+import co.com.david.inversiones.model.exception.UnknownCatalogEntryException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -153,11 +153,11 @@ class TransactionRepositoryAdapterTest {
     }
 
     @Test
-    void savingATransactionForATickerAbsentFromTheCatalogRaisesUnknownInstrumentExceptionAndInsertsNoRow() {
+    void savingATransactionForATickerAbsentFromTheCatalogRaisesUnknownCatalogEntryExceptionAndInsertsNoRow() {
         Transaction toSave = build("NOPE", "Hapi", "1", Money.usd("10"));
 
         assertThatThrownBy(() -> adapter.save(toSave))
-                .isInstanceOf(UnknownInstrumentException.class);
+                .isInstanceOf(UnknownCatalogEntryException.class);
 
         Long count = entityManager.getEntityManager()
                 .createQuery("select count(t) from TransactionData t where t.instrument.ticker = 'NOPE'", Long.class)
@@ -166,11 +166,11 @@ class TransactionRepositoryAdapterTest {
     }
 
     @Test
-    void savingATransactionForABrokerAbsentFromTheCatalogRaisesUnknownInstrumentException() {
+    void savingATransactionForABrokerAbsentFromTheCatalogRaisesUnknownCatalogEntryException() {
         Transaction toSave = build("QQQ", "NoSuchBroker", "1", Money.usd("10"));
 
         assertThatThrownBy(() -> adapter.save(toSave))
-                .isInstanceOf(UnknownInstrumentException.class);
+                .isInstanceOf(UnknownCatalogEntryException.class);
     }
 
     @Test

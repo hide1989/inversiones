@@ -4,7 +4,7 @@ import co.com.david.inversiones.model.Position;
 import co.com.david.inversiones.model.Transaction;
 import co.com.david.inversiones.model.TransactionType;
 import co.com.david.inversiones.model.exception.InvalidTradeDateException;
-import co.com.david.inversiones.model.exception.UnknownInstrumentException;
+import co.com.david.inversiones.model.exception.UnknownCatalogEntryException;
 import co.com.david.inversiones.model.gateways.InstrumentRepository;
 import co.com.david.inversiones.model.gateways.TimeProvider;
 import co.com.david.inversiones.model.gateways.TransactionRepository;
@@ -35,7 +35,7 @@ public class RegisterTransactionUseCase {
 
     public Transaction execute(Transaction candidate) {
         instrumentRepository.findByTicker(candidate.ticker())
-                .orElseThrow(() -> new UnknownInstrumentException(candidate.ticker()));
+                .orElseThrow(() -> UnknownCatalogEntryException.forInstrument(candidate.ticker()));
 
         if (candidate.tradedAt().isAfter(timeProvider.today())) {
             throw new InvalidTradeDateException(candidate.tradedAt(), timeProvider.today());

@@ -3,7 +3,7 @@ package co.com.david.inversiones.usecase.transaction;
 import co.com.david.inversiones.model.*;
 import co.com.david.inversiones.model.exception.InsufficientPositionException;
 import co.com.david.inversiones.model.exception.InvalidTradeDateException;
-import co.com.david.inversiones.model.exception.UnknownInstrumentException;
+import co.com.david.inversiones.model.exception.UnknownCatalogEntryException;
 import co.com.david.inversiones.model.gateways.InstrumentRepository;
 import co.com.david.inversiones.model.gateways.TimeProvider;
 import co.com.david.inversiones.model.gateways.TransactionRepository;
@@ -73,7 +73,7 @@ class RegisterTransactionUseCaseTest {
         when(instrumentRepository.findByTicker(QQQ)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(candidate))
-                .isInstanceOf(UnknownInstrumentException.class)
+                .isInstanceOf(UnknownCatalogEntryException.class)
                 .hasMessageContaining("QQQ");
         verify(transactionRepository, never()).save(any());
     }

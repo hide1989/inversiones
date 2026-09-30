@@ -6,7 +6,7 @@ import co.com.david.inversiones.jpa.instrument.InstrumentData;
 import co.com.david.inversiones.jpa.instrument.SpringDataInstrumentRepository;
 import co.com.david.inversiones.model.Ticker;
 import co.com.david.inversiones.model.Transaction;
-import co.com.david.inversiones.model.exception.UnknownInstrumentException;
+import co.com.david.inversiones.model.exception.UnknownCatalogEntryException;
 import co.com.david.inversiones.model.gateways.TransactionRepository;
 import org.springframework.stereotype.Repository;
 
@@ -54,16 +54,16 @@ public class TransactionRepositoryAdapter implements TransactionRepository {
     }
 
     /**
-     * @throws UnknownInstrumentException when the transaction's ticker or broker name is not in the
+     * @throws UnknownCatalogEntryException when the transaction's ticker or broker name is not in the
      *     catalog, so that a missing reference surfaces as this domain exception rather than as a
      *     foreign-key constraint violation bubbling up as an unhandled 500.
      */
     @Override
     public Transaction save(Transaction transaction) {
         InstrumentData instrument = instrumentRepository.findByTicker(transaction.ticker().symbol())
-                .orElseThrow(() -> new UnknownInstrumentException(transaction.ticker()));
+                .orElseThrow(() -> UnknownCatalogEntryException.forInstrument(transaction.ticker()));
         BrokerData broker = brokerRepository.findByName(transaction.brokerName())
-                .orElseThrow(() -> UnknownInstrumentException.forUnknownBroker(transaction.brokerName()));
+                .orElseThrow(() -> UnknownCatalogEntryException.forBroker(transaction.brokerName()));
 
         TransactionData saved = transactionRepository.save(
                 TransactionMapper.toData(transaction, instrument, broker));
