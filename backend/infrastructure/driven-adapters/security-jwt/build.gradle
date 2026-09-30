@@ -1,0 +1,10 @@
+dependencies {
+    implementation project(':model')
+
+    // spring-boot-starter-security brings spring-security-crypto (BCryptPasswordEncoder)
+    // and its own autoconfiguration (spring-boot-security).
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    // Boot 4 namespaces the resource-server starter under security; it brings
+    // spring-security-oauth2-jose (Nimbus JwtEncoder/JwtDecoder) and its autoconfiguration.
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+}

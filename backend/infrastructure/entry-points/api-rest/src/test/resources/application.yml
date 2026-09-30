@@ -1,0 +1,5 @@
+# Test-only property for CorsConfig's origin allow-list, mirroring the local default in
+# application.yml (the Vite dev server Plan 3 runs).
+inversiones:
+  security:
+    allowed-origins: http://localhost:5173

@@ -25,3 +25,5 @@ include ':rest-consumer'
 project(':rest-consumer').projectDir = file('./infrastructure/driven-adapters/rest-consumer')
 include ':api-rest'
 project(':api-rest').projectDir = file('./infrastructure/entry-points/api-rest')
+include ':security-jwt'
+project(':security-jwt').projectDir = file('./infrastructure/driven-adapters/security-jwt')

@@ -4,4 +4,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    // The filter chain lives here because it intercepts inbound requests (an entry-point
+    // concern); the JwtEncoder/JwtDecoder it authenticates against are wired in :security-jwt.
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+
+    // Test-only: configures MockMvc with Spring Security's test support (springSecurity()).
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 }

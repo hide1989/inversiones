@@ -33,16 +33,13 @@ management:
       probes:
         enabled: true
 
-# Sample rest-consumer/circuit-breaker/CORS wiring left by the clean-architecture
+# Sample rest-consumer/circuit-breaker wiring left by the clean-architecture
 # scaffold. Task 4 replaces the sample RestConsumer and ApiRest classes that
 # consume these; the settings stay so the scaffold-generated code keeps working
 # until then. Every value reads an environment variable with a local default.
 adapter:
   restconsumer:
     url: ${RESTCONSUMER_URL:http://localhost:8080}
-
-cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:8080}
 
 resilience4j:
   circuitbreaker:
@@ -139,3 +136,6 @@ inversiones:
   security:
     jwt-secret: ${JWT_SECRET:local-development-secret-change-me-32bytes}
     jwt-expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
+    # Exact origins allowed to call this API cross-origin; no wildcard. Defaults to the Vite dev
+    # server Plan 3 runs.
+    allowed-origins: ${SECURITY_ALLOWED_ORIGINS:http://localhost:5173}
