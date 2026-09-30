@@ -12,8 +12,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -36,6 +39,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TransactionRepositoryAdapter.class,
         co.com.david.inversiones.jpa.instrument.InstrumentRepositoryAdapter.class})
+// Enabled only so findAllIssuesAConstantNumberOfQueriesRegardlessOfRowCount can assert a hard
+// SQL-statement-count bound below, proving @EntityGraph actually prevents an N+1 rather than just
+// not throwing.
+@TestPropertySource(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 class TransactionRepositoryAdapterTest {
 
     @Container
@@ -150,6 +157,33 @@ class TransactionRepositoryAdapterTest {
         List<Transaction> all = adapter.findAll();
 
         assertThat(all.size()).isGreaterThanOrEqualTo(26);
+    }
+
+    /**
+     * Proves {@link SpringDataTransactionRepository#findAll()}'s {@code @EntityGraph} actually
+     * prevents an N+1, rather than merely not throwing {@code LazyInitializationException}: on the
+     * 26 seeded transactions across 20 instruments, a single statement fetches every row together
+     * with its {@code instrument} and {@code broker} association. Before the entity graph was
+     * added, {@link TransactionMapper#toDomain} reading each row's lazy proxies issued one extra
+     * SELECT per row instead — a count that grows with the table, not a fixed one. A test that only
+     * asserts "it did not throw" cannot tell the two apart; only counting statements can.
+     */
+    @Test
+    void findAllIssuesAConstantNumberOfQueriesRegardlessOfRowCount() {
+        entityManager.flush();
+        entityManager.clear();
+        Statistics statistics = entityManager.getEntityManager()
+                .getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+
+        List<Transaction> all = adapter.findAll();
+
+        assertThat(all.size()).isGreaterThanOrEqualTo(26);
+        assertThat(statistics.getPrepareStatementCount())
+                .as("findAll() over %d rows should issue one JOIN FETCH statement, not one per row",
+                        all.size())
+                .isLessThanOrEqualTo(2);
     }
 
     @Test

@@ -28,9 +28,17 @@ import java.util.Optional;
  * {@code data.getInstrument().getTicker()} through that lazy proxy. Calling it from outside any
  * transaction therefore throws {@code LazyInitializationException}, invisible to a unit test or a
  * {@code @DataJpaTest} that wraps its whole test method in one transaction, and only surfaced by an
- * acceptance test driving a real HTTP request end to end. {@code @Transactional(readOnly = true)}
- * on every read method, and a plain {@code @Transactional} on {@link #save}, keeps one session
- * open across both the repository call and the mapping that follows it.
+ * acceptance test driving a real HTTP request end to end.
+ *
+ * <p>{@code @Transactional(readOnly = true)} on every read method, and a plain
+ * {@code @Transactional} on {@link #save}, keeps one session open across both the repository call
+ * and the mapping that follows it — but a transaction only keeps a lazy proxy alive long enough to
+ * be loaded; it does not stop the load from happening once per row. {@link #findAll} and
+ * {@link #findByTickerAndBroker}, which can return many rows, fetch {@code instrument} and
+ * {@code broker} eagerly via {@code @EntityGraph} on {@link SpringDataTransactionRepository} instead
+ * — one SQL statement per call regardless of row count. {@link #findById} returns at most one row,
+ * so the extra per-row query an N+1 describes cannot occur there; the transaction alone is
+ * sufficient and no entity graph was added.
  */
 @Repository
 public class TransactionRepositoryAdapter implements TransactionRepository {

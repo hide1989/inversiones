@@ -23,7 +23,13 @@ import java.util.Optional;
  * {@code TransactionRepositoryAdapter}, with {@code spring.jpa.open-in-view: false} a derived
  * Spring Data method's own transaction closes before {@link SignalSnapshotMapper#toDomain} reads
  * the lazy instrument proxy, so every read method here needs its own
- * {@code @Transactional(readOnly = true)} to keep one session open across both calls.
+ * {@code @Transactional(readOnly = true)} to keep one session open across both calls — but a
+ * transaction only keeps the proxy alive long enough to be loaded; it does not stop the load from
+ * happening once per row. {@link #findBetween} can return many rows (a whole history range), so it
+ * fetches {@code instrument} eagerly via {@code @EntityGraph} on
+ * {@link SpringDataSignalSnapshotRepository} instead — one SQL statement regardless of row count.
+ * {@link #findLatest} returns at most one row, so the extra per-row query an N+1 describes cannot
+ * occur there; the transaction alone is sufficient and no entity graph was added.
  */
 @Repository
 public class SignalSnapshotRepositoryAdapter implements SignalSnapshotRepository {

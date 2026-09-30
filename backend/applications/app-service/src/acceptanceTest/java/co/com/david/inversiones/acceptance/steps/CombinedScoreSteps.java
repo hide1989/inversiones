@@ -8,6 +8,7 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
@@ -39,9 +40,16 @@ public class CombinedScoreSteps {
         this.wireMock = wireMock;
     }
 
-    @Given("technical, news and analyst signals are available for TSLA")
-    public void technicalNewsAndAnalystSignalsAreAvailableForTsla() {
-        // These three stay on the happy-path fixtures GlobalHooks already stubbed; nothing to do.
+    @Given("technical, news and analyst signals are available for TSLA with scores {double}, {double} and {double}")
+    public void technicalNewsAndAnalystSignalsAreAvailableForTsla(double technical, double news, double analyst) {
+        // These three stay on the happy-path fixtures GlobalHooks already stubbed (from
+        // indicadores-tecnicos.json, news-sentiment.json and ratings-analistas.json); nothing to
+        // stub here. The three numbers in the step text are exactly what those fixtures carry for
+        // TSLA — asserted here so a fixture edit that silently changes them breaks this scenario
+        // loudly, instead of leaving "3.79" in the Then step quietly wrong.
+        assertThat(technical).isEqualTo(4.5);
+        assertThat(news).isEqualTo(4.6);
+        assertThat(analyst).isEqualTo(1.27);
     }
 
     @Given("the insider, social and WSB sources are unavailable")
@@ -77,17 +85,23 @@ public class CombinedScoreSteps {
         assertThat(Set.copyOf(usedSources)).isEqualTo(expected);
     }
 
-    @Then("{string} is not reported as a sell purely because data was missing")
-    public void tickerIsNotReportedAsASellPurelyBecauseDataWasMissing(String ticker) {
-        List<String> levels = JsonPath.read(state.lastResponse().getBody(),
-                "$.signals[?(@.ticker=='" + ticker + "')].score.level");
-        assertThat(levels).isNotEmpty();
-        String level = levels.get(0);
-        // Treating a missing source's weight as a zero score (instead of redistributing it across
-        // the sources that actually answered) would push this ticker's combined score down into
-        // STRONG_SELL territory; redistribution keeps it no worse than what its available data
-        // actually supports.
-        assertThat(level).isNotEqualTo("STRONG_SELL");
+    /**
+     * Pins the exact numeric outcome of proportional redistribution, not merely that one
+     * unfavourable level was avoided: {@code sum(score x weight) / sum(weight)} over the three
+     * surviving sources — TECHNICAL 4.5 x 0.30, NEWS 4.6 x 0.20, ANALYST 1.27 x 0.15, divided by
+     * 0.30 + 0.20 + 0.15 = 0.65 — is 2.4605 / 0.65 = 3.7853..., which {@link
+     * co.com.david.inversiones.model.CombinedScore#from} rounds HALF_UP to scale 2: "3.79". That
+     * number is reachable only if the missing sources' weight was redistributed across the three
+     * that answered; treating them as zero-score instead would use the full 1.00 denominator and
+     * yield 2.46 (a STRONG_SELL) rather than 3.79 (a SELL) — so an exact match here is proof
+     * redistribution happened, where merely excluding STRONG_SELL would not be.
+     */
+    @Then("the combined score for {string} equals {string}, the value proportional redistribution of the three surviving sources' weights produces")
+    public void theCombinedScoreEqualsTheRedistributedValue(String ticker, String expectedScore) {
+        List<String> values = JsonPath.read(state.lastResponse().getBody(),
+                "$.signals[?(@.ticker=='" + ticker + "')].score.value");
+        assertThat(values).isNotEmpty();
+        assertThat(new BigDecimal(values.get(0))).isEqualByComparingTo(new BigDecimal(expectedScore));
     }
 
     @SuppressWarnings("unchecked")

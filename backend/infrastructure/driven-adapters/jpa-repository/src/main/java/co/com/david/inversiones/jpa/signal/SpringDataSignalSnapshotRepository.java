@@ -1,5 +1,6 @@
 package co.com.david.inversiones.jpa.signal;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
@@ -17,7 +18,18 @@ public interface SpringDataSignalSnapshotRepository extends JpaRepository<Signal
      */
     Optional<SignalSnapshotData> findFirstByInstrumentTickerOrderBySnapshotDateDesc(String ticker);
 
-    /** All snapshots for a ticker with a date in {@code [from, to]}, ascending by date. */
+    /**
+     * All snapshots for a ticker with a date in {@code [from, to]}, ascending by date.
+     *
+     * <p>{@code @EntityGraph} fetches {@code instrument} — {@code FetchType.LAZY} on
+     * {@link SignalSnapshotData} — in the same SQL statement via a JOIN, rather than leaving it as a
+     * lazy proxy: {@link SignalSnapshotMapper#toDomain} reads it for every row this returns, so
+     * without this a transaction-wrapped call still issues one extra query per row (an N+1) even
+     * though it no longer throws {@code LazyInitializationException}. A transaction keeps the
+     * session open long enough for a lazy load to succeed; it does not stop one from happening. A
+     * history range can return many rows, so this is the method where an N+1 would actually bite.
+     */
+    @EntityGraph(attributePaths = {"instrument"})
     List<SignalSnapshotData> findByInstrumentTickerAndSnapshotDateBetweenOrderBySnapshotDateAsc(
             String ticker, LocalDate from, LocalDate to);
 
