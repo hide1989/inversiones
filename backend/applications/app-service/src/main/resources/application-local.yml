@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:inversiones}
+    username: ${POSTGRES_USER:inversiones}
+    password: ${POSTGRES_PASSWORD:inversiones_local}
+
+logging:
+  level:
+    co.com.david.inversiones: DEBUG

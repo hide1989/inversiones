@@ -754,3 +754,233 @@ MSG
 ```
 
 ---
+
+## Tasks 4 to 12 — fidelity note
+
+Tasks 1 to 3 carry full source because they encode decisions that are easy to get wrong silently.
+Tasks 4 onward are specified as **contracts plus the tests that pin them**: the exact behaviour
+required, the exact test cases, and the constraints — but not every line of adapter boilerplate. Two
+reasons. First, the scaffold generates the adapter skeletons and their class names, so writing their
+bodies here would be guessing at names Task 2's report establishes. Second, where Plan 1's full-source
+approach paid for itself was in arithmetic and business rules, which are now done; what remains is
+mapping and wiring, where a precise contract plus a failing test is enough to make the work
+unambiguous.
+
+Where a task below says "following the contract", the implementer writes the code and the review
+checks it against the named behaviour and tests.
+
+---
+
+### Task 4: JPA adapter for transactions and instruments
+
+**Depends on Task 2's report** for the generated module path and sample class names to replace.
+
+**Produces:** `TransactionRepository` and `InstrumentRepository` implementations, JPA entities for
+`transactions` and `instruments`, and mappers between entity and domain.
+
+**Contract:**
+- Entities `TransactionData` and `InstrumentData` live in the adapter, annotated with `jakarta.persistence`, using Lombok `@Builder` (allowed in infrastructure). They are **never** returned from the adapter — every public method returns domain types.
+- Mapping is explicit hand-written code, not a reflection-based mapper. A mapper that silently drops a field is the failure this avoids, and `Money`/`Quantity`/`Ticker` need deliberate conversion anyway.
+- `TransactionData` stores `currency` as a column and reconstitutes `Money.of(amount, Currency.valueOf(currency))`. The currency travels with the amount in both directions.
+- `findByTickerAndBroker(Ticker, String)` is a derived query joining both foreign keys; it must not load all transactions and filter in Java.
+- Saving a `Transaction` whose instrument or broker is absent from the catalog raises `UnknownInstrumentException` rather than a constraint violation surfacing as a 500.
+
+**Tests** — `@DataJpaTest` with Testcontainers PostgreSQL, Flyway applied:
+1. A saved transaction round-trips: every field equal, `Money` scale preserved at 10, currency preserved.
+2. A COP transaction round-trips as COP, not silently as USD. (This is the Plan 1 Critical's shape; the persistence layer must not reintroduce it.)
+3. `findByTickerAndBroker` returns only the matching pair, with a fixture containing the same ticker at two brokers and a different ticker at the same broker.
+4. `findById` on an unknown id returns `Optional.empty()`, not null.
+5. `deleteById` removes exactly one row.
+6. `findByTicker` on `InstrumentRepository` is case-insensitive in the sense that `Ticker.of` already normalizes — assert `findByTicker(Ticker.of("qqq"))` finds the seeded QQQ.
+7. The seeded portfolio is readable: `findAll()` returns at least 18 transactions after migrations.
+
+**Also in this task:** replace the scaffold's `UseCasesConfigTest` tautology. It currently catches
+`UnsatisfiedDependencyException` and asserts `assertTrue(true, ...)`, so it can never fail. Leave it
+until the adapters exist, then — in Task 10 — it becomes a real context test. Note here that the
+dependency is now half-satisfiable, and record in the report which gateways still lack a bean.
+
+---
+
+### Task 5: JPA adapter for users and signal snapshots
+
+**Produces:** `UserRepository` and `SignalSnapshotRepository` implementations plus their entities.
+
+**Contract:**
+- `SignalSnapshotData` maps the six per-source score columns to a `Map<SignalSource, BigDecimal>`, **omitting nulls** so the domain's "absent source" semantics survive the round trip. A null column must not become a zero score — that is the failure mode the domain's weight redistribution exists to avoid.
+- `raw_payload` is `JSONB`, written as a `String` through a `@JdbcTypeCode(SqlTypes.JSON)` column. The adapter does not parse it; it is captured for future recomputation.
+- `saveAll(List)` is a single batch, not a loop of `save` calls.
+- `findLatest(Ticker)` orders by `snapshot_date DESC` and limits to one, in SQL.
+- `findBetween(Ticker, from, to)` is inclusive at both ends and ordered ascending by date.
+
+**Tests** — `@DataJpaTest` with Testcontainers:
+1. A snapshot with three of six sources present round-trips with exactly those three in `availableSources()`, and `scoreOf` is empty for the other three.
+2. A snapshot whose `insider_score` column is NULL comes back with `INSIDER` **absent**, not present-as-zero.
+3. `findLatest` returns the most recent by date when three snapshots exist for one ticker.
+4. `findBetween` includes both boundary dates and excludes a snapshot one day outside each end.
+5. `saveAll` of three snapshots issues one batch and returns three.
+6. `findByUsername` returns the seeded user; an unknown username returns `Optional.empty()`.
+7. The stored `password_hash` is not readable through `User.toString()`.
+
+---
+
+### Task 6: n8n consumer for quotes, exchange rate and signals
+
+**Produces:** `QuoteProvider`, `ExchangeRateProvider` and `SignalProvider` implementations in the
+`rest-consumer` adapter, with Resilience4j and a Caffeine cache.
+
+**Contract:**
+- One `RestClient` bean configured from `inversiones.n8n.base-url`, connect timeout 5s, read timeout 30s.
+- Endpoints: `/precios-hoy`, `/trm-hoy`, `/bvc-precios`, `/indicadores-tecnicos`, `/news-sentiment`, `/ratings-analistas`, `/insider-trading`, `/stocktwits`, `/reddit`.
+- `SignalProvider.fetchSnapshots` calls the six signal endpoints and assembles one `SignalSnapshot` per ticker. **A failing endpoint contributes no score for its source rather than failing the batch** — that is what the domain's weight redistribution is for, and it is the whole degradation story of spec §4.8.
+- `QuoteProvider.findQuotes` merges `/precios-hoy` (USD) and `/bvc-precios` (COP), and **must set each quote's currency from its source**: a BVC price is `Money.cop`. Getting this wrong reintroduces the Plan 1 Critical from the other side.
+- Deserialization tolerates unknown fields (`FAIL_ON_UNKNOWN_PROPERTIES` off) so an upstream addition does not break the adapter.
+- Resilience4j circuit breaker and retry per endpoint; Caffeine cache with a per-endpoint TTL. The TRM is cached for the day; quotes for 5 minutes.
+- No API key and no secret appears in code or logs. The base URL comes from configuration.
+
+**Tests** — MockWebServer with fixture payloads captured from the real endpoints, stored under `src/test/resources/n8n/`:
+1. A successful `/trm-hoy` yields an `ExchangeRate` with the right rate and date.
+2. A BVC price yields a `Quote` in **COP**; a NASDAQ price yields one in **USD**.
+3. A 500 from one signal endpoint leaves that source absent from the snapshot and the other five present.
+4. A read timeout is handled the same way as a 500.
+5. Malformed JSON does not propagate a Jackson exception to the caller.
+6. An unknown field in the payload does not fail deserialization.
+7. Repeated calls within the TTL hit the cache — one upstream request for two calls.
+8. The circuit breaker opens after the configured failure count and stops calling upstream.
+
+---
+
+### Task 7: n8n consumer for the four pass-through providers
+
+**Produces:** `AiSynthesisProvider`, `EarningsProvider`, `WatchlistProvider`, `FundamentalsProvider`
+ports (declared in `domain/model/gateways`) plus their `rest-consumer` implementations, and the four
+pass-through use cases spec §4.5 names: `GetAiSynthesisUseCase`, `GetEarningsUseCase`,
+`GetWatchlistUseCase`, `GetFundamentalsUseCase`.
+
+**Contract:**
+- Domain types `AiSynthesis`, `EarningsEvent`, `WatchlistItem`, `Fundamentals` — hand-written builders, no framework.
+- `GetAiSynthesisUseCase` **excludes tickers the provider marked `sin_datos`** from any average it reports, and surfaces them as a separate list. Same rule as the signals dashboard, same reason.
+- `GetEarningsUseCase` orders by proximity and computes days-remaining through `TimeProvider`, never `LocalDate.now()`.
+- `/sintesis-ia` takes about 55 seconds upstream but is served from n8n's own cache; the read timeout must accommodate a cold call, and the adapter falls back to the last persisted snapshot rather than failing the request.
+
+**Tests:** MockWebServer for each provider — a happy path, an upstream failure, and for AI synthesis specifically a payload containing a `sin_datos` ticker asserting it is excluded from the average and listed separately. Mockito tests for the four use cases against mocked ports.
+
+---
+
+### Task 8: Security — BCrypt, JWT, Spring Security
+
+**Produces:** `PasswordHasher` and `TokenProvider` implementations in a `security-jwt` adapter, plus
+the Spring Security filter chain.
+
+**Contract:**
+- `PasswordHasher` wraps `BCryptPasswordEncoder`. `matches` delegates to the encoder, which is constant-time; the domain never learns the algorithm.
+- `TokenProvider` issues an HS256 JWT with `sub` = username, `iat`, `exp` from `inversiones.security.jwt-expiration-minutes`, signed with `inversiones.security.jwt-secret`. It reads the clock through `TimeProvider`, so token expiry is testable without sleeping.
+- The secret must be at least 32 bytes; a shorter one fails fast at startup with a clear message rather than at first login.
+- Stateless: `SessionCreationPolicy.STATELESS`, CSRF disabled (there is no session cookie), a `OncePerRequestFilter` validating the bearer token.
+- Public: `POST /api/v1/auth/login`, `/actuator/health`, `/actuator/info`, and the OpenAPI/Swagger paths. **Everything else requires a valid token.**
+- CORS allows exactly the origins in `inversiones.security.allowed-origins`, defaulting to `http://localhost:5173` for the Vite dev server. No wildcard.
+- A rejected request returns `401` as a `ProblemDetail`, never a stack trace and never a hint about which half of the credentials failed.
+
+**Tests:**
+1. A hash produced by `hash` verifies with `matches`; a different password does not.
+2. An issued token validates and carries the right subject.
+3. A token past its expiry is rejected — driven by advancing the injected `TimeProvider`, with no `Thread.sleep`.
+4. A token signed with a different secret is rejected.
+5. A tampered payload is rejected.
+6. A secret shorter than 32 bytes fails context startup.
+7. `@SpringBootTest` + MockMvc: a protected endpoint without a token returns 401; with a valid token returns 200.
+8. A preflight `OPTIONS` from the allowed origin succeeds; from another origin it does not.
+
+---
+
+### Task 9: REST entry point
+
+**Produces:** the controllers, request/response DTOs, exception handling and OpenAPI document for the
+fifteen endpoints in spec §4.6.
+
+**Contract:**
+- One controller per resource: auth, portfolio, transactions, signals, ai-synthesis, earnings, watchlist, fundamentals, diversification.
+- DTOs are records in the entry point, with Jakarta Validation annotations. **No domain type and no JPA entity is serialized** — mapping is explicit.
+- Errors via `@RestControllerAdvice` producing RFC 7807 `ProblemDetail`: `DomainException` subclasses map to 400 except `TransactionNotFoundException` → 404 and `InvalidCredentialsException` → 401; anything unmapped → 500 with a generated correlation id in the body and the stack trace only in the log.
+- `springdoc-openapi` publishes `/v3/api-docs` and `/swagger-ui`. Every endpoint documents its response shape.
+- Money is serialized as a string, not a JSON number, so no client can lose scale to a double. Each amount is an object `{"amount": "300.0000000000", "currency": "USD"}`.
+
+**Tests:** `@SpringBootTest` + MockMvc per endpoint — the success shape, the validation failure shape,
+401 without a token, and for `/portfolio` a case containing both a USD and a COP position asserting
+the base currency is reported. Money-as-string is asserted explicitly, because a regression to a
+numeric type would be invisible until a client rounded a figure.
+
+---
+
+### Task 10: Wiring, configuration and the scheduled refresh
+
+**Produces:** `app-service` beans for every use case, the `TimeProvider` implementation, typed
+configuration properties, and the scheduled snapshot refresh.
+
+**Contract:**
+- `UseCasesConfig` declares one bean per use case with constructor injection. `base-trm` is injected into `CalculateTotalReturnUseCase` from `inversiones.base-trm`.
+- `TimeProvider` is implemented once over `java.time.Clock` with a `Clock.systemUTC()` bean, so tests can substitute a fixed clock.
+- `@ConfigurationProperties` records for the `inversiones.*` tree, validated at startup.
+- `RefreshSignalSnapshotUseCase` runs on a `@Scheduled` cron at 10:15 Bogotá time on weekdays — after the upstream workflows have refreshed, per `AGENT_SPEC.md`. Scheduling lives in `app-service`, never in the domain.
+- **Replace the scaffold's `UseCasesConfigTest`.** It catches `UnsatisfiedDependencyException` and asserts `assertTrue(true, ...)`, so it cannot fail. Now that every gateway has an implementation, the context must start, and a test that cannot fail would hide a broken application. Replace it with a `@SpringBootTest` that starts the full context against Testcontainers and asserts every use case bean is present by name.
+
+**Tests:** the real context test above; a test that a fixed `Clock` makes `TimeProvider.today()`
+deterministic; and a test that the scheduled method is registered with the expected cron, without
+waiting for it to fire.
+
+---
+
+### Task 11: Cucumber acceptance suite
+
+**Produces:** a separate `acceptanceTest` Gradle task running Gherkin scenarios against the fully
+wired application, with Testcontainers PostgreSQL and WireMock standing in for n8n.
+
+**Contract:**
+- Features in English under `src/acceptanceTest/resources/features/`. Step definitions drive the real HTTP API, not the use cases directly — an acceptance test that bypasses the controller is not testing the product.
+- WireMock is stubbed from the same fixture payloads Task 6 captured, so the two layers agree about what n8n returns.
+- The suite runs via `./gradlew acceptanceTest` and does not run as part of `test`, so the unit suite stays fast.
+- Scenarios cover the six groups spec §6.2 names: authentication; the full transaction lifecycle; profit and loss with the exchange effect reported separately; combined scoring with sources unavailable; the diversification ceilings; and graceful degradation when n8n is down.
+
+**The scenario that matters most**, because it is the one a unit test cannot prove:
+```gherkin
+  Scenario: A mixed currency portfolio is valued without the currency effect being hidden
+    Given the seeded portfolio holds QQQ at Hapi in dollars and TERPEL at Trii in pesos
+    And the current exchange rate is 3912.40 COP per USD
+    When the user requests the total return report
+    Then the asset gain and the exchange rate effect are reported as separate amounts
+    And the portfolio total is expressed in a single declared base currency
+```
+
+---
+
+### Task 12: Make it run locally
+
+**Produces:** the one command the user actually needs, and the documentation for it.
+
+**Contract:**
+- `backend/deployment/Dockerfile`: multi-stage, `eclipse-temurin:25-jdk` to build and `:25-jre` to run, non-root user, `HEALTHCHECK` against `/actuator/health`, `-XX:MaxRAMPercentage=75`.
+- `deploy/docker-compose.dev.yml` gains the backend service alongside PostgreSQL, wired by service name, with the backend waiting on the database's healthcheck.
+- `README.md` gets a "Run it locally" section with the exact commands and what each proves.
+- A `scripts/smoke.sh` that starts the stack, waits for health, logs in, calls `/api/v1/portfolio`, asserts the response contains a base currency, and exits non-zero on any failure. This is the script Plan 4's pipeline will reuse against a deployed environment.
+
+**Verification — the deliverable of this whole plan:**
+```bash
+docker compose -f deploy/docker-compose.dev.yml up -d --build
+bash scripts/smoke.sh          # exits 0
+cd backend && ./gradlew test acceptanceTest --no-configuration-cache
+```
+
+## Definition of Done (Plan 2)
+
+- [ ] `./gradlew clean build validateStructure --no-configuration-cache` green, merged coverage ≥80%.
+- [ ] `./gradlew acceptanceTest` green: all six scenario groups.
+- [ ] `docker compose -f deploy/docker-compose.dev.yml up -d --build` then `bash scripts/smoke.sh` exits 0.
+- [ ] `domain/` still has zero framework imports; `validateStructure` still green.
+- [ ] No JPA entity or DTO is reachable from `domain/`; no domain type is serialized by the API.
+- [ ] No secret in Git; `deploy/.env.template` documents every variable.
+- [ ] The scaffold's tautological `UseCasesConfigTest` is replaced by a context test that can fail.
+- [ ] Nothing in this plan required a cloud account, VPS access or a GitHub webhook.
+
+## Out of scope (Plan 3 and Plan 4)
+
+Plan 3 is the React frontend. Plan 4 is deployment: the Vercel project, the Hostinger VPS compose
+file behind the existing Traefik, and Jenkins with a GitHub webhook. None of it is touched here.
