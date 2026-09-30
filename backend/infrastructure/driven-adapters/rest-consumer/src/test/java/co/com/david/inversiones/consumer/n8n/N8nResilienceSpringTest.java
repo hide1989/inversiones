@@ -9,12 +9,15 @@ import co.com.david.inversiones.model.gateways.ExchangeRateProvider;
 import co.com.david.inversiones.model.gateways.QuoteProvider;
 import co.com.david.inversiones.model.gateways.SignalProvider;
 import co.com.david.inversiones.model.gateways.TimeProvider;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -65,6 +68,9 @@ class N8nResilienceSpringTest {
 
     @Autowired
     private ExchangeRateProvider exchangeRateProvider;
+
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
 
     @BeforeAll
     static void startServer() throws IOException {
@@ -137,21 +143,39 @@ class N8nResilienceSpringTest {
         assertThat(REQUEST_COUNTS.getOrDefault("/bvc-precios", new AtomicInteger()).get()).isEqualTo(1);
     }
 
+    /**
+     * Forces the "stocktwits" breaker back to a known {@code CLOSED} state before this test, rather
+     * than merely hoping it starts that way. This is the real isolation fix: the assertion on the
+     * initial state stays in the test body (so a regression that leaves the breaker dirty is still
+     * caught), and this reset is what guarantees that assertion is checking the reset, not luck of
+     * execution order.
+     */
+    @BeforeEach
+    void resetStocktwitsBreaker() {
+        circuitBreakerRegistry.circuitBreaker("stocktwits").reset();
+    }
+
     @Test
     void theCircuitBreakerOpensAfterTheConfiguredFailureCountAndStopsCallingUpstream() {
+        CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("stocktwits");
+        assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+
+        // minimumNumberOfCalls is 5 and failureRateThreshold is 50 (see application.yml's
+        // n8nCircuitBreakerDefaults / the test resource's testCircuitBreakerDefaults), so a run of
+        // failing calls past that minimum must trip the breaker.
         for (int i = 0; i < 6; i++) {
             signalProvider.fetchSnapshots(Set.of(Ticker.of("QQQ")), LocalDate.of(2026, 9, 30));
         }
-        int callsAfterWarmup = STOCKTWITS_CALLS.get();
 
+        assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+
+        int callsWhenOpen = STOCKTWITS_CALLS.get();
         for (int i = 0; i < 6; i++) {
             signalProvider.fetchSnapshots(Set.of(Ticker.of("QQQ")), LocalDate.of(2026, 9, 30));
         }
-        int callsAfterMore = STOCKTWITS_CALLS.get();
 
-        // Once the breaker for the "stocktwits" instance opens, further calls are short-circuited
-        // (CallNotPermittedException) rather than reaching the mock server, so the request count
-        // must stop growing well before another six calls would have added six more requests.
-        assertThat(callsAfterMore - callsAfterWarmup).isLessThan(6);
+        // Open means short-circuited: not merely fewer upstream requests, but none at all.
+        assertThat(STOCKTWITS_CALLS.get()).isEqualTo(callsWhenOpen);
+        assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
     }
 }
