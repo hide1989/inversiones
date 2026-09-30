@@ -4,6 +4,7 @@ import co.com.david.inversiones.model.*;
 import co.com.david.inversiones.model.exception.InsufficientPositionException;
 import co.com.david.inversiones.model.exception.InvalidTransactionUpdateException;
 import co.com.david.inversiones.model.exception.TransactionNotFoundException;
+import co.com.david.inversiones.model.gateways.TimeProvider;
 import co.com.david.inversiones.model.gateways.TransactionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,8 +29,12 @@ class UpdateTransactionUseCaseTest {
     private static final String HAPI = "Hapi";
     private static final String ARQ = "ARQ";
 
+    private static final LocalDate TODAY = LocalDate.of(2026, 6, 10);
+
     @Mock
     private TransactionRepository transactionRepository;
+    @Mock
+    private TimeProvider timeProvider;
     @InjectMocks
     private UpdateTransactionUseCase useCase;
 
@@ -48,6 +53,7 @@ class UpdateTransactionUseCaseTest {
         when(transactionRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(transactionRepository.findByTickerAndBroker(QQQ, HAPI)).thenReturn(List.of(existing));
         when(transactionRepository.save(replacement)).thenReturn(replacement);
+        when(timeProvider.today()).thenReturn(TODAY);
 
         Transaction result = useCase.execute(1L, replacement);
 
@@ -86,9 +92,22 @@ class UpdateTransactionUseCaseTest {
         Transaction replacement = trade(1L, QQQ, HAPI, TransactionType.BUY, "1", 1);
         when(transactionRepository.findById(1L)).thenReturn(Optional.of(purchase));
         when(transactionRepository.findByTickerAndBroker(QQQ, HAPI)).thenReturn(List.of(purchase, sale));
+        when(timeProvider.today()).thenReturn(TODAY);
 
         assertThatThrownBy(() -> useCase.execute(1L, replacement))
                 .isInstanceOf(InsufficientPositionException.class);
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsAnEditThatMovesTheTradeDateIntoTheFuture() {
+        Transaction existing = trade(1L, QQQ, HAPI, TransactionType.BUY, "2", 1);
+        Transaction replacement = trade(1L, QQQ, HAPI, TransactionType.BUY, "2", 20);
+        when(transactionRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(timeProvider.today()).thenReturn(TODAY);
+
+        assertThatThrownBy(() -> useCase.execute(1L, replacement))
+                .isInstanceOf(co.com.david.inversiones.model.exception.InvalidTradeDateException.class);
         verify(transactionRepository, never()).save(any());
     }
 

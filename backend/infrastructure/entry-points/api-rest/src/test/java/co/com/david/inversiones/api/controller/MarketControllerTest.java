@@ -127,10 +127,14 @@ class MarketControllerTest {
     }
 
     @Test
-    void fundamentalsOfAnUncoveredTickerReturnsNotFound() throws Exception {
+    void fundamentalsOfAnUnresolvedTickerReturnsAProblemDetailNotAnEmptyBody() throws Exception {
         when(getFundamentals.execute(Ticker.of("ZZZZ"))).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/v1/fundamentals/ZZZZ").header("Authorization", token()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail").value("Could not resolve ticker: ZZZZ"));
     }
 }

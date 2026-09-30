@@ -2,6 +2,7 @@ package co.com.david.inversiones.api.controller;
 
 import co.com.david.inversiones.api.ApiTestContext;
 import co.com.david.inversiones.model.*;
+import co.com.david.inversiones.model.exception.InvalidTradeDateException;
 import co.com.david.inversiones.model.exception.TransactionNotFoundException;
 import co.com.david.inversiones.model.exception.UnknownCatalogEntryException;
 import co.com.david.inversiones.usecase.transaction.DeleteTransactionUseCase;
@@ -153,6 +154,19 @@ class TransactionControllerTest {
                         .content(VALID_REQUEST))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void updateWithAFutureTradeDateReturnsBadRequestAsAProblemDetail() throws Exception {
+        when(updateTransaction.execute(org.mockito.ArgumentMatchers.eq(1L), any(Transaction.class)))
+                .thenThrow(new InvalidTradeDateException(LocalDate.of(2099, 1, 1), LocalDate.of(2026, 1, 1)));
+
+        mockMvc.perform(put("/api/v1/transactions/1")
+                        .header("Authorization", token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_REQUEST))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
     }
 
     @Test

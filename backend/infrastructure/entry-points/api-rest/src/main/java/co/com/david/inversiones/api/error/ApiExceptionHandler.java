@@ -3,6 +3,7 @@ package co.com.david.inversiones.api.error;
 import co.com.david.inversiones.model.exception.DomainException;
 import co.com.david.inversiones.model.exception.InvalidCredentialsException;
 import co.com.david.inversiones.model.exception.TransactionNotFoundException;
+import co.com.david.inversiones.model.exception.UnresolvedTickerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -24,10 +25,11 @@ import java.util.UUID;
  * Single point translating every exception this API can raise into an RFC 7807
  * {@link ProblemDetail}.
  *
- * <p>The mapping is deliberately narrow: two specific domain exceptions get their own status
- * ({@link TransactionNotFoundException} to 404, {@link InvalidCredentialsException} to 401)
- * because those are the two cases a client must be able to branch on. Every other
- * {@link DomainException} is a business-rule rejection of the request's content, which is a 400
+ * <p>The mapping is deliberately narrow: a few specific domain exceptions get their own status
+ * ({@link TransactionNotFoundException} and {@link UnresolvedTickerException} to 404,
+ * {@link InvalidCredentialsException} to 401) because those are cases a client must be able to
+ * branch on. Every other {@link DomainException} is a business-rule rejection of the request's
+ * content, which is a 400
  * regardless of which rule fired — adding a bespoke status per exception subtype would just make
  * the client's error handling brittle to a domain refactor. Anything not a {@link DomainException}
  * at all is a bug, not a rejected request, so it is a 500 with a correlation id the operator can
@@ -48,6 +50,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(TransactionNotFoundException.class)
     public ProblemDetail handleNotFound(TransactionNotFoundException exception) {
+        return problemDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(UnresolvedTickerException.class)
+    public ProblemDetail handleUnresolvedTicker(UnresolvedTickerException exception) {
         return problemDetail(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 

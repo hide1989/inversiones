@@ -6,6 +6,7 @@ import co.com.david.inversiones.api.dto.FundamentalsDto;
 import co.com.david.inversiones.api.dto.WatchlistItemDto;
 import co.com.david.inversiones.model.Fundamentals;
 import co.com.david.inversiones.model.Ticker;
+import co.com.david.inversiones.model.exception.UnresolvedTickerException;
 import co.com.david.inversiones.usecase.market.GetAiSynthesisUseCase;
 import co.com.david.inversiones.usecase.market.GetEarningsUseCase;
 import co.com.david.inversiones.usecase.market.GetFundamentalsUseCase;
@@ -14,14 +15,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Optional;
 
 /** Externally-sourced market data: AI reads, earnings calendar, watchlist and on-demand fundamentals. */
 @RestController
@@ -63,10 +62,10 @@ public class MarketController {
 
     @Operation(summary = "On-demand fundamentals for one ticker")
     @GetMapping("/fundamentals/{ticker}")
-    public ResponseEntity<FundamentalsDto> fundamentals(@PathVariable(name = "ticker") String ticker) {
-        Optional<Fundamentals> fundamentals = getFundamentals.execute(Ticker.of(ticker));
-        return fundamentals.map(FundamentalsDto::from)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+    public FundamentalsDto fundamentals(@PathVariable(name = "ticker") String ticker) {
+        Ticker parsed = Ticker.of(ticker);
+        Fundamentals fundamentals = getFundamentals.execute(parsed)
+                .orElseThrow(() -> new UnresolvedTickerException(parsed));
+        return FundamentalsDto.from(fundamentals);
     }
 }
