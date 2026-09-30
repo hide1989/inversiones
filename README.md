@@ -42,6 +42,89 @@ in the build pipeline.
 - **Docker** — for PostgreSQL via Testcontainers in tests, and for local/production deployment.
 - **Node 22** — for the frontend, once it exists.
 
+## Run the backend locally
+
+One command brings up PostgreSQL and the API together, built from source, with no cloud account,
+VPS access or credential beyond what is in this repo.
+
+**Prerequisites**
+
+- **Docker** with Compose v2 (`docker compose version`).
+- **Java 25** is only needed if you want to run `./gradlew` on the host (for the test suites below).
+  The Docker build compiles inside the `eclipse-temurin:25-jdk` image, so a working Java 25 install
+  on the host is not required just to run the stack.
+- The system-wide `gradle` (if installed) cannot be used for this project (Gradle 8.13 cannot run on
+  Java 25) — always use the wrapper, `backend/gradlew`, which the Docker build also uses internally.
+
+**Start everything**
+
+```bash
+# Copy the template once; the defaults work as-is for local use.
+cp deploy/.env.template deploy/.env
+
+docker compose -f deploy/docker-compose.dev.yml up -d --build
+```
+
+This builds the backend image (multi-stage: `eclipse-temurin:25-jdk` to compile with the Gradle
+wrapper, `eclipse-temurin:25-jre` to run), starts PostgreSQL, waits for it to report healthy, then
+starts the backend, which runs Flyway migrations and seeds reference data on boot. The backend
+listens on `http://localhost:8080`.
+
+**Verify it's working**
+
+```bash
+bash scripts/smoke.sh
+```
+
+This waits for `/actuator/health` to report `UP` (bounded timeout, clear failure message), logs in
+with the seeded local credentials, calls `GET /api/v1/portfolio` with the resulting token and checks
+the response declares a base currency and contains amounts, then calls the same endpoint with **no**
+token and checks it is rejected — so the smoke test cannot pass against an unsecured deployment. It
+exits non-zero, naming the failed step, if anything is wrong. It accepts a base URL as an argument or
+via `BASE_URL`, defaulting to `http://localhost:8080`, so the same script can be pointed at a
+deployed environment later.
+
+**Seeded local credentials:** username `david`, password `Inversiones2026!`. These are deliberately
+local-only — the BCrypt hash lives in `V2__seed_reference_data.sql` and is not a production secret.
+
+**n8n dependency:** the application does not contact n8n at startup, so it boots and passes the smoke
+test with no network access to the ingestion VPS. Endpoints that proxy live market/news/analyst data
+(prices, technicals, sentiment, etc.) need n8n reachable at `N8N_BASE_URL` to return real data; without
+it they degrade gracefully (empty/cached data, not an error) rather than failing the boot.
+
+**Run the three test suites**
+
+```bash
+cd backend
+
+# Unit tests (274 tests across all modules) — no Docker required
+./gradlew test --no-configuration-cache
+
+# Cucumber acceptance suite (10 scenarios against the real HTTP API, Testcontainers PostgreSQL,
+# WireMock standing in for n8n) — requires Docker
+./gradlew acceptanceTest --no-configuration-cache
+
+# Full build: unit tests, JaCoCo merged coverage, PIT mutation testing, structure validation
+./gradlew build --no-configuration-cache
+```
+
+**Stop and reset**
+
+```bash
+# Stop the containers, keep the database volume (data survives a restart)
+docker compose -f deploy/docker-compose.dev.yml down
+
+# Stop and wipe everything, including the PostgreSQL volume (full reset)
+docker compose -f deploy/docker-compose.dev.yml down -v
+```
+
+**How `POSTGRES_HOST` is resolved for both cases:** `application-local.yml` defaults
+`POSTGRES_HOST` to `localhost`, which is correct when running the backend directly on the host (for
+example via `./gradlew bootRun`, against the `postgres` container's published port). Inside the
+Compose network, `localhost` would resolve to the backend container itself rather than the database,
+so `deploy/docker-compose.dev.yml` overrides `POSTGRES_HOST=postgres` (the service name) for the
+`backend` service only — the host-run case is untouched.
+
 ## Backend: build and test
 
 All commands run from `backend/`, using the wrapper (`./gradlew`), never the system `gradle`:

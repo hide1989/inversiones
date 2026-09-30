@@ -18,5 +18,31 @@ services:
       timeout: 3s
       retries: 10
 
+  backend:
+    build:
+      context: ../backend
+      dockerfile: deployment/Dockerfile
+    container_name: inversiones-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      # Inside the compose network "localhost" resolves to this container, not the postgres
+      # container, so POSTGRES_HOST must be the service name here. application-local.yml still
+      # defaults POSTGRES_HOST to localhost, which is the right default for `bootRun` on the host.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-inversiones}
+      POSTGRES_USER: ${POSTGRES_USER:-inversiones}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inversiones_local}
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-me-32bytes}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-480}
+      SECURITY_ALLOWED_ORIGINS: ${SECURITY_ALLOWED_ORIGINS:-http://localhost:5173}
+      N8N_BASE_URL: ${N8N_BASE_URL:-https://n8n.srv1449561.hstgr.cloud/webhook/inv}
+      N8N_SLOW_READ_TIMEOUT: ${N8N_SLOW_READ_TIMEOUT:-90s}
+    ports:
+      - "8080:8080"
+
 volumes:
   postgres-data:
