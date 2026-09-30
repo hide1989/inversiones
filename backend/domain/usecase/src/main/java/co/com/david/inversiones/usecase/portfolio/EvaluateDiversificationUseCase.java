@@ -13,6 +13,9 @@ import java.util.*;
  * they are one exposure, and checking them separately would let two 15% lots hide a 30%
  * concentration. An instrument absent from the catalog is treated as an equity in an unknown sector
  * so that it falls under the stricter ceiling instead of escaping the check.
+ *
+ * <p>Weights are computed on base-currency market value, so a peso holding and a dollar holding sit
+ * on the same scale; a ratio mixing the two would be meaningless.
  */
 public class EvaluateDiversificationUseCase {
 
@@ -42,8 +45,8 @@ public class EvaluateDiversificationUseCase {
             String sector = instrument.map(Instrument::sector).orElse(UNKNOWN_SECTOR);
 
             typeByTicker.put(ticker.symbol(), type);
-            valueByTicker.merge(ticker.symbol(), position.marketValue(), Money::add);
-            valueBySector.merge(sector, position.marketValue(), Money::add);
+            valueByTicker.merge(ticker.symbol(), position.marketValueInBaseCurrency(), Money::add);
+            valueBySector.merge(sector, position.marketValueInBaseCurrency(), Money::add);
         }
 
         Map<String, Percentage> weightByTicker = weights(valueByTicker, total);

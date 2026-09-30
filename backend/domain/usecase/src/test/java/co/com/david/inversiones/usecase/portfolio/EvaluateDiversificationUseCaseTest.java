@@ -32,7 +32,30 @@ class EvaluateDiversificationUseCaseTest {
         return ValuedPosition.builder()
                 .position(held).marketValue(Money.usd(marketValue))
                 .unrealizedPnl(Money.zero(Currency.USD)).unrealizedPnlPercent(Percentage.zero())
-                .dayChangePercent(Percentage.zero()).priced(true).build();
+                .dayChangePercent(Percentage.zero()).priced(true)
+                .costInBaseCurrency(Money.usd(marketValue))
+                .marketValueInBaseCurrency(Money.usd(marketValue))
+                .build();
+    }
+
+    /**
+     * Builds a position whose native amount is in {@code nativeCost}'s currency (possibly pesos)
+     * while its base-currency market value is supplied explicitly, since the use case reads only
+     * the base-currency field.
+     */
+    private static ValuedPosition positionWithBase(String ticker, String broker, Money nativeCost,
+                                                   Money marketValueInBase) {
+        Position held = Position.builder()
+                .ticker(Ticker.of(ticker)).brokerName(broker).quantity(Quantity.of("1"))
+                .totalCost(nativeCost).averageCost(nativeCost)
+                .realizedPnl(Money.zero(nativeCost.currency())).build();
+        return ValuedPosition.builder()
+                .position(held).marketValue(nativeCost)
+                .unrealizedPnl(Money.zero(nativeCost.currency())).unrealizedPnlPercent(Percentage.zero())
+                .dayChangePercent(Percentage.zero()).priced(true)
+                .costInBaseCurrency(marketValueInBase)
+                .marketValueInBaseCurrency(marketValueInBase)
+                .build();
     }
 
     private void catalog(String ticker, InstrumentType type, String sector) {
@@ -42,11 +65,12 @@ class EvaluateDiversificationUseCaseTest {
     }
 
     private void portfolioOf(ValuedPosition... positions) {
-        Money total = List.of(positions).stream().map(ValuedPosition::marketValue)
+        Money total = List.of(positions).stream().map(ValuedPosition::marketValueInBaseCurrency)
                 .reduce(Money.zero(Currency.USD), Money::add);
         when(getPortfolio.execute()).thenReturn(PortfolioValuation.builder()
                 .positions(List.of(positions)).totalInvested(total).totalMarketValue(total)
-                .totalUnrealizedPnl(Money.zero(Currency.USD)).unpricedTickers(List.of()).build());
+                .totalUnrealizedPnl(Money.zero(Currency.USD)).unpricedTickers(List.of())
+                .baseCurrency(Currency.USD).build());
     }
 
     @Test
@@ -147,6 +171,20 @@ class EvaluateDiversificationUseCaseTest {
             assertThat(violation.subject()).isEqualTo("SPCX");
         });
         assertThat(report.weightBySector()).containsKey("UNKNOWN");
+    }
+
+    @Test
+    void weighsPesoAndDollarHoldingsOnTheSameBaseCurrencyScale() {
+        // TERPEL: 30 USD of base-currency market value; QQQ: 70 USD. Total 100.
+        portfolioOf(positionWithBase("TERPEL", "Trii", Money.cop("120000"), Money.usd("30")),
+                positionWithBase("QQQ", "Hapi", Money.usd("70"), Money.usd("70")));
+        catalog("TERPEL", InstrumentType.EQUITY, "Energy");
+        catalog("QQQ", InstrumentType.ETF, "Broad Market");
+
+        DiversificationReport report = useCase.execute();
+
+        assertThat(report.weightByTicker().get("TERPEL").value()).isEqualByComparingTo("30.0000");
+        assertThat(report.violations()).extracting(DiversificationViolation::subject).contains("TERPEL");
     }
 
     @Test

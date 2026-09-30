@@ -46,7 +46,31 @@ class CalculateTotalReturnUseCaseTest {
                 .position(held).marketValue(Money.usd(marketValue))
                 .unrealizedPnl(Money.usd(marketValue).subtract(Money.usd(cost)))
                 .unrealizedPnlPercent(Percentage.zero()).dayChangePercent(Percentage.zero())
-                .priced(true).build();
+                .priced(true)
+                .costInBaseCurrency(Money.usd(cost))
+                .marketValueInBaseCurrency(Money.usd(marketValue))
+                .build();
+    }
+
+    /**
+     * Builds a position natively denominated in Colombian pesos, matching the currency the BVC
+     * segment reports in. The base-currency fields are unused by this use case; they are set to
+     * arbitrary non-null dollar amounts only to satisfy {@link ValuedPosition}'s required fields.
+     */
+    private static ValuedPosition positionCop(String ticker, String broker, String cost, String marketValue) {
+        Position held = Position.builder()
+                .ticker(Ticker.of(ticker)).brokerName(broker)
+                .quantity(Quantity.of("1")).totalCost(Money.cop(cost))
+                .averageCost(Money.cop(cost)).realizedPnl(Money.zero(Currency.COP))
+                .build();
+        return ValuedPosition.builder()
+                .position(held).marketValue(Money.cop(marketValue))
+                .unrealizedPnl(Money.cop(marketValue).subtract(Money.cop(cost)))
+                .unrealizedPnlPercent(Percentage.zero()).dayChangePercent(Percentage.zero())
+                .priced(true)
+                .costInBaseCurrency(Money.usd(cost))
+                .marketValueInBaseCurrency(Money.usd(marketValue))
+                .build();
     }
 
     private void catalog(String ticker, String exchange) {
@@ -61,6 +85,7 @@ class CalculateTotalReturnUseCaseTest {
                 .positions(List.of(positions))
                 .totalInvested(Money.usd("0")).totalMarketValue(Money.usd("0"))
                 .totalUnrealizedPnl(Money.usd("0")).unpricedTickers(List.of())
+                .baseCurrency(Currency.USD)
                 .build());
         when(exchangeRateProvider.currentCopPerUsd()).thenReturn(CURRENT);
     }
@@ -101,7 +126,7 @@ class CalculateTotalReturnUseCaseTest {
 
     @Test
     void theColombianSegmentContributesNothingToTheExchangeEffect() {
-        portfolioOf(position("TERPEL", "Trii", "100.00", "130.00"));
+        portfolioOf(positionCop("TERPEL", "Trii", "100.00", "130.00"));
         catalog("TERPEL", "BVC");
 
         TotalReturn result = useCase().execute();
@@ -118,6 +143,7 @@ class CalculateTotalReturnUseCaseTest {
                 .positions(List.of(position("QQQ", "Hapi", "300.00", "300.00")))
                 .totalInvested(Money.usd("300")).totalMarketValue(Money.usd("300"))
                 .totalUnrealizedPnl(Money.usd("0")).unpricedTickers(List.of())
+                .baseCurrency(Currency.USD)
                 .build());
 
         TotalReturn result = useCase().execute();

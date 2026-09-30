@@ -5,6 +5,10 @@ import java.util.Objects;
 /**
  * A position combined with its current market price. A position with no available quote is
  * carried at cost with {@code priced() == false}.
+ *
+ * <p>Native amounts stay in the instrument's own currency; the base-currency amounts exist so that
+ * portfolio-wide totals and allocation weights can be computed across currencies without the
+ * caller needing a rate.
  */
 public final class ValuedPosition {
 
@@ -14,6 +18,8 @@ public final class ValuedPosition {
     private final Percentage unrealizedPnlPercent;
     private final Percentage dayChangePercent;
     private final boolean priced;
+    private final Money costInBaseCurrency;
+    private final Money marketValueInBaseCurrency;
 
     private ValuedPosition(Builder builder) {
         this.position = Objects.requireNonNull(builder.position, "position must not be null");
@@ -24,6 +30,10 @@ public final class ValuedPosition {
         this.dayChangePercent = Objects.requireNonNull(builder.dayChangePercent,
                 "dayChangePercent must not be null");
         this.priced = builder.priced;
+        this.costInBaseCurrency = Objects.requireNonNull(builder.costInBaseCurrency,
+                "costInBaseCurrency must not be null");
+        this.marketValueInBaseCurrency = Objects.requireNonNull(builder.marketValueInBaseCurrency,
+                "marketValueInBaseCurrency must not be null");
     }
 
     public static Builder builder() {
@@ -54,6 +64,16 @@ public final class ValuedPosition {
         return priced;
     }
 
+    /** This position's cost, converted into the portfolio's base currency. */
+    public Money costInBaseCurrency() {
+        return costInBaseCurrency;
+    }
+
+    /** This position's market value, converted into the portfolio's base currency. */
+    public Money marketValueInBaseCurrency() {
+        return marketValueInBaseCurrency;
+    }
+
     /** Fluent builder for {@link ValuedPosition}. */
     public static final class Builder {
 
@@ -63,6 +83,8 @@ public final class ValuedPosition {
         private Percentage unrealizedPnlPercent;
         private Percentage dayChangePercent;
         private boolean priced;
+        private Money costInBaseCurrency;
+        private Money marketValueInBaseCurrency;
 
         private Builder() {
         }
@@ -94,6 +116,16 @@ public final class ValuedPosition {
 
         public Builder priced(boolean priced) {
             this.priced = priced;
+            return this;
+        }
+
+        public Builder costInBaseCurrency(Money costInBaseCurrency) {
+            this.costInBaseCurrency = costInBaseCurrency;
+            return this;
+        }
+
+        public Builder marketValueInBaseCurrency(Money marketValueInBaseCurrency) {
+            this.marketValueInBaseCurrency = marketValueInBaseCurrency;
             return this;
         }
 

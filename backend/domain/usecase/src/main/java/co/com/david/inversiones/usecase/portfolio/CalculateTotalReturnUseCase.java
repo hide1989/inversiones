@@ -55,7 +55,7 @@ public class CalculateTotalReturnUseCase {
 
         List<ReturnSegment> segments = grouped.entrySet().stream()
                 .filter(entry -> !entry.getValue().isEmpty())
-                .map(entry -> summarize(entry.getKey(), entry.getValue()))
+                .map(entry -> summarize(entry.getKey(), entry.getValue(), currentRate))
                 .toList();
 
         Set<MarketSegment> dollarSegments = EnumSet.of(MarketSegment.USD_ASSETS, MarketSegment.TRII_ADR);
@@ -89,13 +89,13 @@ public class CalculateTotalReturnUseCase {
         return onBvc ? MarketSegment.BVC_COLOMBIA : MarketSegment.TRII_ADR;
     }
 
-    private ReturnSegment summarize(MarketSegment segment, List<ValuedPosition> positions) {
+    private ReturnSegment summarize(MarketSegment segment, List<ValuedPosition> positions, ExchangeRate rate) {
         Currency currency = segment.currency();
         Money invested = positions.stream()
-                .map(position -> Money.of(position.position().totalCost().amount(), currency))
+                .map(position -> toSegmentCurrency(position.position().totalCost(), currency, rate))
                 .reduce(Money.zero(currency), Money::add);
         Money marketValue = positions.stream()
-                .map(position -> Money.of(position.marketValue().amount(), currency))
+                .map(position -> toSegmentCurrency(position.marketValue(), currency, rate))
                 .reduce(Money.zero(currency), Money::add);
         return ReturnSegment.builder()
                 .segment(segment)
@@ -103,6 +103,19 @@ public class CalculateTotalReturnUseCase {
                 .marketValue(marketValue)
                 .assetGain(marketValue.subtract(invested))
                 .build();
+    }
+
+    /**
+     * Returns {@code amount} unchanged when it already matches {@code segmentCurrency}, or converts
+     * it with {@code rate} otherwise. A currency that still disagrees after conversion is a
+     * programming error, so no exception is swallowed here: the subsequent {@link Money#add} call
+     * raises {@code CurrencyMismatchException} instead of papering over it.
+     */
+    private Money toSegmentCurrency(Money amount, Currency segmentCurrency, ExchangeRate rate) {
+        if (amount.currency() == segmentCurrency) {
+            return amount;
+        }
+        return rate.convert(amount);
     }
 
     private Money sum(List<ReturnSegment> segments, Set<MarketSegment> included,

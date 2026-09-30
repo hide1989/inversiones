@@ -3,7 +3,12 @@ package co.com.david.inversiones.model;
 import java.util.List;
 import java.util.Objects;
 
-/** The full portfolio, valued against current market quotes, with totals across all positions. */
+/**
+ * The full portfolio, valued against current market quotes, with totals across all positions.
+ *
+ * <p>The three totals are expressed in {@link #baseCurrency()}, converted at the rate in force
+ * when the valuation was produced.
+ */
 public final class PortfolioValuation {
 
     private final List<ValuedPosition> positions;
@@ -11,6 +16,7 @@ public final class PortfolioValuation {
     private final Money totalMarketValue;
     private final Money totalUnrealizedPnl;
     private final List<Ticker> unpricedTickers;
+    private final Currency baseCurrency;
 
     private PortfolioValuation(Builder builder) {
         this.positions = List.copyOf(Objects.requireNonNull(builder.positions, "positions must not be null"));
@@ -21,6 +27,7 @@ public final class PortfolioValuation {
                 "totalUnrealizedPnl must not be null");
         this.unpricedTickers = List.copyOf(Objects.requireNonNull(builder.unpricedTickers,
                 "unpricedTickers must not be null"));
+        this.baseCurrency = Objects.requireNonNull(builder.baseCurrency, "baseCurrency must not be null");
     }
 
     public static Builder builder() {
@@ -47,6 +54,11 @@ public final class PortfolioValuation {
         return unpricedTickers;
     }
 
+    /** Currency every total in this valuation is expressed in. */
+    public Currency baseCurrency() {
+        return baseCurrency;
+    }
+
     /** Fluent builder for {@link PortfolioValuation}. */
     public static final class Builder {
 
@@ -55,6 +67,7 @@ public final class PortfolioValuation {
         private Money totalMarketValue;
         private Money totalUnrealizedPnl;
         private List<Ticker> unpricedTickers;
+        private Currency baseCurrency;
 
         private Builder() {
         }
@@ -81,6 +94,11 @@ public final class PortfolioValuation {
 
         public Builder unpricedTickers(List<Ticker> unpricedTickers) {
             this.unpricedTickers = unpricedTickers;
+            return this;
+        }
+
+        public Builder baseCurrency(Currency baseCurrency) {
+            this.baseCurrency = baseCurrency;
             return this;
         }
 
