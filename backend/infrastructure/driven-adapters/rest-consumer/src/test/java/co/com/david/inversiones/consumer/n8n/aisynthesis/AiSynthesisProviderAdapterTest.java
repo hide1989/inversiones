@@ -48,7 +48,7 @@ class AiSynthesisProviderAdapterTest {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
         RestClient restClient = TestRestClients.forMockServer(mockWebServer);
-        adapter = new AiSynthesisProviderAdapter(new N8nGateway(restClient), timeProvider);
+        adapter = new AiSynthesisProviderAdapter(new N8nGateway(restClient, restClient), timeProvider);
     }
 
     @AfterEach

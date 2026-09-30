@@ -46,9 +46,19 @@ import org.springframework.web.client.RestClient;
 public class N8nGateway {
 
     private final RestClient restClient;
+    private final RestClient slowRestClient;
 
-    public N8nGateway(@Qualifier("n8nRestClient") RestClient restClient) {
+    /**
+     * @param restClient     used for every endpoint except {@code /sintesis-ia}; 30s read timeout.
+     * @param slowRestClient used only for {@code /sintesis-ia}, which can legitimately take ~55s on
+     *                       a cold n8n cache — see {@code N8nClientConfig#n8nSlowRestClient} for why
+     *                       that endpoint cannot share the fast client's timeout.
+     */
+    public N8nGateway(
+            @Qualifier("n8nRestClient") RestClient restClient,
+            @Qualifier("n8nSlowRestClient") RestClient slowRestClient) {
         this.restClient = restClient;
+        this.slowRestClient = slowRestClient;
     }
 
     @CircuitBreaker(name = "trm")
@@ -108,7 +118,7 @@ public class N8nGateway {
     @CircuitBreaker(name = "sintesis-ia")
     @Retry(name = "sintesis-ia")
     public SintesisIaResponseDto fetchSintesisIa() {
-        return restClient.get().uri("/sintesis-ia").retrieve().body(SintesisIaResponseDto.class);
+        return slowRestClient.get().uri("/sintesis-ia").retrieve().body(SintesisIaResponseDto.class);
     }
 
     @CircuitBreaker(name = "earnings")

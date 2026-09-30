@@ -76,7 +76,7 @@ class SignalProviderAdapterTest {
 
     private SignalProviderAdapter adapterWithReadTimeout(Duration readTimeout) {
         RestClient restClient = TestRestClients.forMockServer(mockWebServer, readTimeout);
-        return new SignalProviderAdapter(new N8nGateway(restClient));
+        return new SignalProviderAdapter(new N8nGateway(restClient, restClient));
     }
 
     private static Supplier<MockResponse> okFixture(String name) {

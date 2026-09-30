@@ -40,7 +40,7 @@ class EarningsProviderAdapterTest {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
         RestClient restClient = TestRestClients.forMockServer(mockWebServer);
-        adapter = new EarningsProviderAdapter(new N8nGateway(restClient));
+        adapter = new EarningsProviderAdapter(new N8nGateway(restClient, restClient));
     }
 
     @AfterEach

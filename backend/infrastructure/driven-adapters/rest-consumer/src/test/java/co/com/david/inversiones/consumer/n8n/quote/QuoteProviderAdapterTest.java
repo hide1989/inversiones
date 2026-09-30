@@ -57,7 +57,7 @@ class QuoteProviderAdapterTest {
         });
 
         RestClient restClient = TestRestClients.forMockServer(mockWebServer);
-        N8nGateway gateway = new N8nGateway(restClient);
+        N8nGateway gateway = new N8nGateway(restClient, restClient);
         QuoteCacheSource cacheSource = new QuoteCacheSource(gateway);
         adapter = new QuoteProviderAdapter(cacheSource);
     }

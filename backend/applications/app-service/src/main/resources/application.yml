@@ -87,12 +87,17 @@ resilience4j:
       reddit: *n8nCircuitBreakerDefaults
       # Task 7: four more pass-through endpoints. sintesis-ia gets its own slow-call threshold
       # because it can legitimately take ~55s on a cold call upstream (normally served from n8n's
-      # own cache); the shared 4s default would misclassify that as a slow call.
+      # own cache); the shared 4s default would misclassify that as a slow call. It is now backed
+      # by its own RestClient with a 90s read timeout (inversiones.n8n.slow-read-timeout), so 70s
+      # sits with margin above the documented ~55s cold-start ceiling (no false "slow" verdict on a
+      # normal cold call) while still being comfortably under the 90s hard timeout, so a call that
+      # is genuinely degraded (stuck well past a normal cold start) gets flagged as slow before the
+      # breaker would otherwise just wait out the full 90s for a timeout exception.
       sintesis-ia:
         registerHealthIndicator: true
         failureRateThreshold: 50
         slowCallRateThreshold: 50
-        slowCallDurationThreshold: 60s
+        slowCallDurationThreshold: 70s
         permittedNumberOfCallsInHalfOpenState: 3
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
@@ -130,6 +135,7 @@ inversiones:
     base-url: ${N8N_BASE_URL:https://n8n.srv1449561.hstgr.cloud/webhook/inv}
     connect-timeout: 5s
     read-timeout: 30s
+    slow-read-timeout: ${N8N_SLOW_READ_TIMEOUT:90s}
   security:
     jwt-secret: ${JWT_SECRET:local-development-secret-change-me-32bytes}
     jwt-expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}

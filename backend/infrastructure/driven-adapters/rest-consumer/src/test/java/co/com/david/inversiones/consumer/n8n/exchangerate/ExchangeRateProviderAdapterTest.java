@@ -46,7 +46,7 @@ class ExchangeRateProviderAdapterTest {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
         RestClient restClient = TestRestClients.forMockServer(mockWebServer);
-        N8nGateway gateway = new N8nGateway(restClient);
+        N8nGateway gateway = new N8nGateway(restClient, restClient);
         ExchangeRateCacheSource cacheSource =
                 new ExchangeRateCacheSource(gateway, timeProvider, new BigDecimal("3568.42"));
         adapter = new ExchangeRateProviderAdapter(cacheSource);

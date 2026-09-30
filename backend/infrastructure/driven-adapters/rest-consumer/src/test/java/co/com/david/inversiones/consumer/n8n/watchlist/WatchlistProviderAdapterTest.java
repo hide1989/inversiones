@@ -31,7 +31,7 @@ class WatchlistProviderAdapterTest {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
         RestClient restClient = TestRestClients.forMockServer(mockWebServer);
-        adapter = new WatchlistProviderAdapter(new N8nGateway(restClient));
+        adapter = new WatchlistProviderAdapter(new N8nGateway(restClient, restClient));
     }
 
     @AfterEach

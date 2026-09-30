@@ -44,7 +44,7 @@ class FundamentalsProviderAdapterTest {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
         RestClient restClient = TestRestClients.forMockServer(mockWebServer);
-        adapter = new FundamentalsProviderAdapter(new N8nGateway(restClient));
+        adapter = new FundamentalsProviderAdapter(new N8nGateway(restClient, restClient));
         responses.clear();
         mockWebServer.setDispatcher(new Dispatcher() {
             @Override
