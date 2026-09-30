@@ -1,5 +1,24 @@
 apply plugin: 'org.springframework.boot'
 
+// Task 11: a separate source set for the Cucumber acceptance suite. It is deliberately NOT part
+// of `test` or `check` (see the `acceptanceTest` task below) because it needs Docker for
+// Testcontainers PostgreSQL, and a developer running `./gradlew test` or `./gradlew check` must
+// not be forced to have Docker running just to compile and run the fast unit suite.
+sourceSets {
+    // Declaring the source set is enough: Gradle's convention already wires its Java and
+    // resources directories to src/acceptanceTest/java and src/acceptanceTest/resources, which is
+    // exactly the layout this task needs.
+    acceptanceTest {
+        compileClasspath += sourceSets.main.output + sourceSets.test.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+    }
+}
+
+configurations {
+    acceptanceTestImplementation.extendsFrom testImplementation
+    acceptanceTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
 dependencies {
 	testImplementation 'org.springframework:spring-web'
 	implementation project(':api-rest')
@@ -22,6 +41,36 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
+
+    // Task 11: Cucumber JVM 7 + JUnit Platform engine, driving the real HTTP API.
+    // Not managed by Spring Boot's dependency-management BOM, so pinned explicitly.
+    acceptanceTestImplementation 'io.cucumber:cucumber-java:7.20.1'
+    acceptanceTestImplementation 'io.cucumber:cucumber-spring:7.20.1'
+    acceptanceTestImplementation 'io.cucumber:cucumber-junit-platform-engine:7.20.1'
+    acceptanceTestImplementation 'org.junit.platform:junit-platform-suite'
+    // WireMock standing in for n8n. Not managed by Spring Boot's BOM either.
+    acceptanceTestImplementation 'org.wiremock:wiremock-standalone:3.9.2'
+    // Spring Boot 4's modularized autoconfiguration: TestRestTemplate (now under
+    // org.springframework.boot.resttestclient) lives in its own artifact rather than arriving
+    // transitively through spring-boot-starter-test.
+    acceptanceTestImplementation 'org.springframework.boot:spring-boot-resttestclient'
+}
+
+tasks.register('acceptanceTest', Test) {
+    description = 'Runs the Cucumber acceptance suite against the real HTTP API, ' +
+            'Testcontainers PostgreSQL and WireMock standing in for n8n. Requires Docker.'
+    group = 'verification'
+    testClassesDirs = sourceSets.acceptanceTest.output.classesDirs
+    classpath = sourceSets.acceptanceTest.runtimeClasspath
+    useJUnitPlatform()
+    // Points the WireMock stub loader at the SAME n8n fixture payloads rest-consumer's unit tests
+    // already use (captured from the live n8n workflows in Tasks 6/7), read straight off disk
+    // rather than duplicated here, so the acceptance layer and the adapter layer cannot drift.
+    systemProperty 'fixtures.n8n.dir',
+            file('../../infrastructure/driven-adapters/rest-consumer/src/test/resources/n8n').absolutePath
+    // Deliberately not wired into `test` or `check` (see the source-set comment above).
+    shouldRunAfter test
+    outputs.upToDateWhen { false }
 }
 
 tasks.register('explodedJar', Copy) {

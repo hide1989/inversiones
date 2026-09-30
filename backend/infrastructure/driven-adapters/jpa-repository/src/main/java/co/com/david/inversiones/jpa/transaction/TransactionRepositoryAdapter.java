@@ -9,6 +9,7 @@ import co.com.david.inversiones.model.Transaction;
 import co.com.david.inversiones.model.exception.UnknownCatalogEntryException;
 import co.com.david.inversiones.model.gateways.TransactionRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +20,17 @@ import java.util.Optional;
  * <p>No {@link TransactionData} is ever returned from a public method here; every result passes
  * through {@link TransactionMapper} before it leaves this class, so nothing in {@code domain/}
  * needs to know a JPA entity exists.
+ *
+ * <p>{@code instrument} and {@code broker} on {@link TransactionData} are {@code FetchType.LAZY}
+ * (see its Javadoc). With {@code spring.jpa.open-in-view: false}, a derived Spring Data repository
+ * method such as {@code findById} runs in its own short-lived transaction that closes the moment
+ * the method returns — before control ever reaches {@link TransactionMapper#toDomain}, which reads
+ * {@code data.getInstrument().getTicker()} through that lazy proxy. Calling it from outside any
+ * transaction therefore throws {@code LazyInitializationException}, invisible to a unit test or a
+ * {@code @DataJpaTest} that wraps its whole test method in one transaction, and only surfaced by an
+ * acceptance test driving a real HTTP request end to end. {@code @Transactional(readOnly = true)}
+ * on every read method, and a plain {@code @Transactional} on {@link #save}, keeps one session
+ * open across both the repository call and the mapping that follows it.
  */
 @Repository
 public class TransactionRepositoryAdapter implements TransactionRepository {
@@ -36,11 +48,13 @@ public class TransactionRepositoryAdapter implements TransactionRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Transaction> findAll() {
         return transactionRepository.findAll().stream().map(TransactionMapper::toDomain).toList();
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Transaction> findByTickerAndBroker(Ticker ticker, String brokerName) {
         return transactionRepository.findByInstrumentTickerAndBrokerName(ticker.symbol(), brokerName)
                 .stream()
@@ -49,6 +63,7 @@ public class TransactionRepositoryAdapter implements TransactionRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<Transaction> findById(Long id) {
         return transactionRepository.findById(id).map(TransactionMapper::toDomain);
     }
@@ -59,6 +74,7 @@ public class TransactionRepositoryAdapter implements TransactionRepository {
      *     foreign-key constraint violation bubbling up as an unhandled 500.
      */
     @Override
+    @Transactional
     public Transaction save(Transaction transaction) {
         InstrumentData instrument = instrumentRepository.findByTicker(transaction.ticker().symbol())
                 .orElseThrow(() -> UnknownCatalogEntryException.forInstrument(transaction.ticker()));

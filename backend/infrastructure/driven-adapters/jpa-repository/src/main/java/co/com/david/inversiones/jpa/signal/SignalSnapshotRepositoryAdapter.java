@@ -7,6 +7,7 @@ import co.com.david.inversiones.model.Ticker;
 import co.com.david.inversiones.model.exception.UnknownCatalogEntryException;
 import co.com.david.inversiones.model.gateways.SignalSnapshotRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -17,6 +18,12 @@ import java.util.Optional;
  *
  * <p>No {@link SignalSnapshotData} is ever returned from a public method here; every result passes
  * through {@link SignalSnapshotMapper} before it leaves this class.
+ *
+ * <p>{@code instrument} on {@link SignalSnapshotData} is {@code FetchType.LAZY}. As in
+ * {@code TransactionRepositoryAdapter}, with {@code spring.jpa.open-in-view: false} a derived
+ * Spring Data method's own transaction closes before {@link SignalSnapshotMapper#toDomain} reads
+ * the lazy instrument proxy, so every read method here needs its own
+ * {@code @Transactional(readOnly = true)} to keep one session open across both calls.
  */
 @Repository
 public class SignalSnapshotRepositoryAdapter implements SignalSnapshotRepository {
@@ -36,6 +43,7 @@ public class SignalSnapshotRepositoryAdapter implements SignalSnapshotRepository
      *     constraint violation bubbling up as an unhandled 500.
      */
     @Override
+    @Transactional
     public SignalSnapshot save(SignalSnapshot snapshot) {
         InstrumentData instrument = resolveInstrument(snapshot.ticker());
         SignalSnapshotData toSave = toData(snapshot, instrument);
@@ -50,6 +58,7 @@ public class SignalSnapshotRepositoryAdapter implements SignalSnapshotRepository
      * job that calls this treats as one unit of work.
      */
     @Override
+    @Transactional
     public List<SignalSnapshot> saveAll(List<SignalSnapshot> snapshots) {
         List<SignalSnapshotData> toSave = snapshots.stream()
                 .map(snapshot -> toData(snapshot, resolveInstrument(snapshot.ticker())))
@@ -58,12 +67,14 @@ public class SignalSnapshotRepositoryAdapter implements SignalSnapshotRepository
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<SignalSnapshot> findLatest(Ticker ticker) {
         return snapshotRepository.findFirstByInstrumentTickerOrderBySnapshotDateDesc(ticker.symbol())
                 .map(SignalSnapshotMapper::toDomain);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<SignalSnapshot> findBetween(Ticker ticker, LocalDate from, LocalDate to) {
         return snapshotRepository
                 .findByInstrumentTickerAndSnapshotDateBetweenOrderBySnapshotDateAsc(ticker.symbol(), from, to)
