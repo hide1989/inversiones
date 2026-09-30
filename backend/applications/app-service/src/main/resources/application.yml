@@ -10,6 +10,12 @@ spring:
       enabled: true
   devtools:
     add-properties: false
+  # TODO(task 4): remove once the driven adapters implement the domain gateways.
+  # UseCasesConfig component-scans every *UseCase class into a Spring bean; with
+  # no gateway adapter beans yet, eager instantiation fails context refresh with
+  # UnsatisfiedDependencyException. Lazy init defers that until first real use.
+  main:
+    lazy-initialization: true
   jpa:
     open-in-view: false
     hibernate:
