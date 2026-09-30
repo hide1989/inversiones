@@ -10,6 +10,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
 
+    // Request-body validation (Jakarta Validation annotations on DTOs), driven by the starter's
+    // bundled Hibernate Validator implementation.
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Publishes /v3/api-docs and /swagger-ui, both already public in SecurityConfig.
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
+
     // Test-only: configures MockMvc with Spring Security's test support (springSecurity()).
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 }
