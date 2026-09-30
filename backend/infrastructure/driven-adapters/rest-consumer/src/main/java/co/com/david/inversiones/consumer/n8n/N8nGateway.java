@@ -1,14 +1,20 @@
 package co.com.david.inversiones.consumer.n8n;
 
+import co.com.david.inversiones.consumer.n8n.dto.AnalizarEmpresaResponseDto;
 import co.com.david.inversiones.consumer.n8n.dto.BvcPreciosResponseDto;
+import co.com.david.inversiones.consumer.n8n.dto.EarningsResponseDto;
+import co.com.david.inversiones.consumer.n8n.dto.EtfFichaResponseDto;
 import co.com.david.inversiones.consumer.n8n.dto.IndicadoresTecnicosResponseDto;
 import co.com.david.inversiones.consumer.n8n.dto.InsiderTradingResponseDto;
 import co.com.david.inversiones.consumer.n8n.dto.NewsSentimentResponseDto;
 import co.com.david.inversiones.consumer.n8n.dto.PreciosHoyResponseDto;
 import co.com.david.inversiones.consumer.n8n.dto.RatingsAnalistasResponseDto;
 import co.com.david.inversiones.consumer.n8n.dto.RedditResponseDto;
+import co.com.david.inversiones.consumer.n8n.dto.SintesisIaResponseDto;
 import co.com.david.inversiones.consumer.n8n.dto.StocktwitsResponseDto;
+import co.com.david.inversiones.consumer.n8n.dto.TickerRequestDto;
 import co.com.david.inversiones.consumer.n8n.dto.TrmResponseDto;
+import co.com.david.inversiones.consumer.n8n.dto.WatchlistResponseDto;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -97,5 +103,39 @@ public class N8nGateway {
     @Retry(name = "reddit")
     public RedditResponseDto fetchReddit() {
         return restClient.get().uri("/reddit").retrieve().body(RedditResponseDto.class);
+    }
+
+    @CircuitBreaker(name = "sintesis-ia")
+    @Retry(name = "sintesis-ia")
+    public SintesisIaResponseDto fetchSintesisIa() {
+        return restClient.get().uri("/sintesis-ia").retrieve().body(SintesisIaResponseDto.class);
+    }
+
+    @CircuitBreaker(name = "earnings")
+    @Retry(name = "earnings")
+    public EarningsResponseDto fetchEarnings() {
+        return restClient.get().uri("/earnings").retrieve().body(EarningsResponseDto.class);
+    }
+
+    @CircuitBreaker(name = "watchlist")
+    @Retry(name = "watchlist")
+    public WatchlistResponseDto fetchWatchlist() {
+        return restClient.get().uri("/watchlist").retrieve().body(WatchlistResponseDto.class);
+    }
+
+    @CircuitBreaker(name = "analizar-empresa")
+    @Retry(name = "analizar-empresa")
+    public AnalizarEmpresaResponseDto postAnalizarEmpresa(String ticker) {
+        return restClient.post().uri("/analizar-empresa")
+                .body(new TickerRequestDto(ticker))
+                .retrieve().body(AnalizarEmpresaResponseDto.class);
+    }
+
+    @CircuitBreaker(name = "etf-ficha")
+    @Retry(name = "etf-ficha")
+    public EtfFichaResponseDto postEtfFicha(String ticker) {
+        return restClient.post().uri("/etf-ficha")
+                .body(new TickerRequestDto(ticker))
+                .retrieve().body(EtfFichaResponseDto.class);
     }
 }

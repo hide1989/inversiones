@@ -1,0 +1,61 @@
+{
+  "fuente": "WF-17 MiniMax M3",
+  "modelo": "MiniMax-M3",
+  "generado": "2026-09-28T13:01:09.470Z",
+  "total_tickers": 3,
+  "tickers_con_datos": 2,
+  "score_promedio_ia": 7.5,
+  "resumen_señales": {
+    "FUERTE COMPRA": 1,
+    "COMPRA": 1,
+    "MANTENER": 0,
+    "VENTA": 0,
+    "FUERTE VENTA": 0
+  },
+  "sintesis": [
+    {
+      "ticker": "NVDA",
+      "score_ia": 8,
+      "señal": "FUERTE COMPRA",
+      "conviction": "alta",
+      "horizonte": "6-12 meses",
+      "valoracion": "atractiva",
+      "resumen": "Crecimiento solido en IA, valoracion razonable frente al sector.",
+      "catalizadores": ["Demanda de datacenters", "Nuevos contratos hyperscaler"],
+      "riesgos": ["Competencia de AMD", "Restricciones de exportacion"],
+      "fundamentales": {
+        "per": 45.2,
+        "peg": 1.1
+      },
+      "sin_datos": false
+    },
+    {
+      "ticker": "MSFT",
+      "score_ia": 7,
+      "señal": "COMPRA",
+      "conviction": "media",
+      "horizonte": "3-6 meses",
+      "valoracion": "justa",
+      "resumen": "Crecimiento de Azure sostenido, margenes solidos.",
+      "catalizadores": ["Adopcion de Copilot"],
+      "riesgos": ["Desaceleracion de gasto en la nube"],
+      "fundamentales": {
+        "per": 27.9
+      },
+      "sin_datos": false
+    },
+    {
+      "ticker": "TSLA",
+      "score_ia": 5,
+      "señal": "MANTENER",
+      "conviction": "media",
+      "horizonte": "3-6 meses",
+      "valoracion": "n/a",
+      "resumen": "Sin analisis disponible: la IA no devolvio una respuesta valida.",
+      "catalizadores": [],
+      "riesgos": [],
+      "fundamentales": null,
+      "sin_datos": true
+    }
+  ]
+}

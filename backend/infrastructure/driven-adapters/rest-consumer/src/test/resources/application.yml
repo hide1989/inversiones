@@ -30,6 +30,11 @@ resilience4j:
       insider-trading: *testCircuitBreakerDefaults
       stocktwits: *testCircuitBreakerDefaults
       reddit: *testCircuitBreakerDefaults
+      sintesis-ia: *testCircuitBreakerDefaults
+      earnings: *testCircuitBreakerDefaults
+      watchlist: *testCircuitBreakerDefaults
+      analizar-empresa: *testCircuitBreakerDefaults
+      etf-ficha: *testCircuitBreakerDefaults
   retry:
     instances:
       trm: &testRetryDefaults
@@ -43,3 +48,8 @@ resilience4j:
       insider-trading: *testRetryDefaults
       stocktwits: *testRetryDefaults
       reddit: *testRetryDefaults
+      sintesis-ia: *testRetryDefaults
+      earnings: *testRetryDefaults
+      watchlist: *testRetryDefaults
+      analizar-empresa: *testRetryDefaults
+      etf-ficha: *testRetryDefaults

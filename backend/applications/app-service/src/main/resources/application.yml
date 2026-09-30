@@ -85,6 +85,22 @@ resilience4j:
       insider-trading: *n8nCircuitBreakerDefaults
       stocktwits: *n8nCircuitBreakerDefaults
       reddit: *n8nCircuitBreakerDefaults
+      # Task 7: four more pass-through endpoints. sintesis-ia gets its own slow-call threshold
+      # because it can legitimately take ~55s on a cold call upstream (normally served from n8n's
+      # own cache); the shared 4s default would misclassify that as a slow call.
+      sintesis-ia:
+        registerHealthIndicator: true
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 60s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 30s
+      earnings: *n8nCircuitBreakerDefaults
+      watchlist: *n8nCircuitBreakerDefaults
+      analizar-empresa: *n8nCircuitBreakerDefaults
+      etf-ficha: *n8nCircuitBreakerDefaults
   retry:
     instances:
       n8nDefaults: &n8nRetryDefaults
@@ -102,6 +118,11 @@ resilience4j:
       insider-trading: *n8nRetryDefaults
       stocktwits: *n8nRetryDefaults
       reddit: *n8nRetryDefaults
+      sintesis-ia: *n8nRetryDefaults
+      earnings: *n8nRetryDefaults
+      watchlist: *n8nRetryDefaults
+      analizar-empresa: *n8nRetryDefaults
+      etf-ficha: *n8nRetryDefaults
 
 inversiones:
   base-trm: ${BASE_TRM:3568.42}

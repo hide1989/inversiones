@@ -1,0 +1,60 @@
+{
+  "fuente": "N8N WF-13 (Finnhub Earnings Calendar)",
+  "timestamp": "2026-09-30T06:00:00.000Z",
+  "proximo_en_reportar": "TSLA en 12 días (2026-10-12)",
+  "alertas_activas": ["TSLA"],
+  "tickers": [
+    {
+      "ticker": "TSLA",
+      "proximo_reporte": "2026-10-12",
+      "dias_restantes": 12,
+      "eps_estimado": 1.23,
+      "ultimo_eps_real": 1.10,
+      "ultimo_eps_estimado": 0.95,
+      "sorpresa_promedio_pct": 15.8,
+      "historial": "positivo consistente",
+      "reportes_analizados": 4,
+      "alerta": "AVISO: reporte en menos de 14 días",
+      "fecha_consulta": "2026-09-30"
+    },
+    {
+      "ticker": "MSFT",
+      "proximo_reporte": "2026-11-20",
+      "dias_restantes": 51,
+      "eps_estimado": 3.45,
+      "ultimo_eps_real": 3.30,
+      "ultimo_eps_estimado": 3.20,
+      "sorpresa_promedio_pct": 3.1,
+      "historial": "mixto",
+      "reportes_analizados": 4,
+      "alerta": null,
+      "fecha_consulta": "2026-09-30"
+    },
+    {
+      "ticker": "NU",
+      "proximo_reporte": null,
+      "dias_restantes": null,
+      "eps_estimado": null,
+      "ultimo_eps_real": null,
+      "ultimo_eps_estimado": null,
+      "sorpresa_promedio_pct": null,
+      "historial": "sin datos",
+      "reportes_analizados": 0,
+      "alerta": null,
+      "fecha_consulta": "2026-09-30"
+    },
+    {
+      "ticker": "GOOGL",
+      "proximo_reporte": "2026-09-20",
+      "dias_restantes": -10,
+      "eps_estimado": 2.10,
+      "ultimo_eps_real": 2.30,
+      "ultimo_eps_estimado": 2.05,
+      "sorpresa_promedio_pct": 8.4,
+      "historial": "positivo consistente",
+      "reportes_analizados": 4,
+      "alerta": null,
+      "fecha_consulta": "2026-09-30"
+    }
+  ]
+}
