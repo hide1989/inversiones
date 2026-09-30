@@ -11,6 +11,10 @@ dependencies {
     implementation project(':model')
     implementation project(':usecase')
     implementation 'org.springframework.boot:spring-boot-starter'
+    // Jakarta Validation annotations for InversionesProperties (Task 10). api-rest already pulls
+    // this in transitively for request-body validation, but as an `implementation` dependency it
+    // is not exposed to this module's compile classpath, so it is declared again here.
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
     runtimeOnly('org.springframework.boot:spring-boot-devtools')
     testImplementation 'com.tngtech.archunit:archunit:1.5.0'
     testImplementation 'tools.jackson.core:jackson-databind'

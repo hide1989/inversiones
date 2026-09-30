@@ -128,6 +128,12 @@ resilience4j:
 
 inversiones:
   base-trm: ${BASE_TRM:3568.42}
+  # RefreshSignalSnapshotUseCase's schedule (Task 10): 10:15 America/Bogota, Monday to Friday, once
+  # the upstream n8n workflows have refreshed for the day. Both fields are also defaulted inline on
+  # the @Scheduled annotation, so a missing property here still falls back to the same schedule.
+  signal-snapshot:
+    refresh-cron: ${SIGNAL_SNAPSHOT_REFRESH_CRON:0 15 10 * * MON-FRI}
+    refresh-zone: ${SIGNAL_SNAPSHOT_REFRESH_ZONE:America/Bogota}
   n8n:
     base-url: ${N8N_BASE_URL:https://n8n.srv1449561.hstgr.cloud/webhook/inv}
     connect-timeout: 5s
