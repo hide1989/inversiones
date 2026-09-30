@@ -65,6 +65,43 @@ resilience4j:
         slidingWindowSize: 10
         minimumNumberOfCalls: 10
         waitDurationInOpenState: 10s
+      # One instance per n8n endpoint group (Task 6), so a flaky /stocktwits does not
+      # trip the breaker guarding /precios-hoy. Shared defaults; tune per-endpoint if a
+      # workflow proves noisier than the rest.
+      trm: &n8nCircuitBreakerDefaults
+        registerHealthIndicator: true
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 4s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 30s
+      precios-hoy: *n8nCircuitBreakerDefaults
+      bvc-precios: *n8nCircuitBreakerDefaults
+      indicadores-tecnicos: *n8nCircuitBreakerDefaults
+      news-sentiment: *n8nCircuitBreakerDefaults
+      ratings-analistas: *n8nCircuitBreakerDefaults
+      insider-trading: *n8nCircuitBreakerDefaults
+      stocktwits: *n8nCircuitBreakerDefaults
+      reddit: *n8nCircuitBreakerDefaults
+  retry:
+    instances:
+      n8nDefaults: &n8nRetryDefaults
+        maxAttempts: 3
+        waitDuration: 500ms
+        retryExceptions:
+          - org.springframework.web.client.RestClientException
+          - com.fasterxml.jackson.core.JsonProcessingException
+      trm: *n8nRetryDefaults
+      precios-hoy: *n8nRetryDefaults
+      bvc-precios: *n8nRetryDefaults
+      indicadores-tecnicos: *n8nRetryDefaults
+      news-sentiment: *n8nRetryDefaults
+      ratings-analistas: *n8nRetryDefaults
+      insider-trading: *n8nRetryDefaults
+      stocktwits: *n8nRetryDefaults
+      reddit: *n8nRetryDefaults
 
 inversiones:
   base-trm: ${BASE_TRM:3568.42}

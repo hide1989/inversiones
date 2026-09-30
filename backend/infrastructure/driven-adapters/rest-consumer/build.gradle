@@ -4,5 +4,14 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-restclient'
     implementation 'io.github.resilience4j:resilience4j-spring-boot4:2.4.0'
+    // resilience4j's @CircuitBreaker/@Retry annotations are woven as Spring AOP advice on
+    // @Aspect-annotated classes; without aspectjweaver on the classpath, Spring silently skips
+    // registering those aspects and the annotations become no-ops.
+    implementation 'org.aspectj:aspectjweaver'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    // Version taken from the Spring Boot dependency-management platform (see main.gradle).
+    implementation 'com.github.ben-manes.caffeine:caffeine'
     testImplementation 'com.squareup.okhttp3:mockwebserver:5.5.0'
 }

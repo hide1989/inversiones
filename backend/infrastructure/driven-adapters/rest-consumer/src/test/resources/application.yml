@@ -1,0 +1,45 @@
+# Test-only wiring for the @SpringBootTest slices that exercise real caching and
+# circuit-breaker behaviour through Spring's proxies. The n8n base URL is overridden
+# per test with a @DynamicPropertySource pointing at a MockWebServer instance.
+adapter:
+  restconsumer:
+    url: http://localhost:1
+
+inversiones:
+  base-trm: 4000.00
+  n8n:
+    base-url: http://localhost:0
+    connect-timeout: 2s
+    read-timeout: 2s
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      trm: &testCircuitBreakerDefaults
+        failureRateThreshold: 50
+        slowCallRateThreshold: 100
+        permittedNumberOfCallsInHalfOpenState: 2
+        slidingWindowSize: 4
+        minimumNumberOfCalls: 4
+        waitDurationInOpenState: 5s
+      precios-hoy: *testCircuitBreakerDefaults
+      bvc-precios: *testCircuitBreakerDefaults
+      indicadores-tecnicos: *testCircuitBreakerDefaults
+      news-sentiment: *testCircuitBreakerDefaults
+      ratings-analistas: *testCircuitBreakerDefaults
+      insider-trading: *testCircuitBreakerDefaults
+      stocktwits: *testCircuitBreakerDefaults
+      reddit: *testCircuitBreakerDefaults
+  retry:
+    instances:
+      trm: &testRetryDefaults
+        maxAttempts: 2
+        waitDuration: 10ms
+      precios-hoy: *testRetryDefaults
+      bvc-precios: *testRetryDefaults
+      indicadores-tecnicos: *testRetryDefaults
+      news-sentiment: *testRetryDefaults
+      ratings-analistas: *testRetryDefaults
+      insider-trading: *testRetryDefaults
+      stocktwits: *testRetryDefaults
+      reddit: *testRetryDefaults
