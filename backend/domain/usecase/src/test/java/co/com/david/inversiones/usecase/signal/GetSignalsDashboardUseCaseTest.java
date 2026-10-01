@@ -13,9 +13,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,10 +51,9 @@ class GetSignalsDashboardUseCaseTest {
     @Test
     void ordersTickersByCombinedScoreDescending() {
         when(transactionRepository.findAll()).thenReturn(List.of(holding(QQQ), holding(TSLA)));
-        when(snapshotRepository.findLatest(QQQ)).thenReturn(Optional.of(
-                snapshot(QQQ, Map.of(SignalSource.TECHNICAL, new BigDecimal("9")))));
-        when(snapshotRepository.findLatest(TSLA)).thenReturn(Optional.of(
-                snapshot(TSLA, Map.of(SignalSource.TECHNICAL, new BigDecimal("4")))));
+        when(snapshotRepository.findLatestForAll(Set.of(QQQ, TSLA))).thenReturn(Map.of(
+                QQQ, snapshot(QQQ, Map.of(SignalSource.TECHNICAL, new BigDecimal("9"))),
+                TSLA, snapshot(TSLA, Map.of(SignalSource.TECHNICAL, new BigDecimal("4")))));
 
         SignalsDashboard dashboard = useCase.execute();
 
@@ -64,9 +67,9 @@ class GetSignalsDashboardUseCaseTest {
     @Test
     void excludesATickerWithNoSourcesFromTheAverageAndTheLevelCounts() {
         when(transactionRepository.findAll()).thenReturn(List.of(holding(QQQ), holding(EC)));
-        when(snapshotRepository.findLatest(QQQ)).thenReturn(Optional.of(
-                snapshot(QQQ, Map.of(SignalSource.TECHNICAL, new BigDecimal("8")))));
-        when(snapshotRepository.findLatest(EC)).thenReturn(Optional.of(snapshot(EC, Map.of())));
+        when(snapshotRepository.findLatestForAll(Set.of(QQQ, EC))).thenReturn(Map.of(
+                QQQ, snapshot(QQQ, Map.of(SignalSource.TECHNICAL, new BigDecimal("8"))),
+                EC, snapshot(EC, Map.of())));
 
         SignalsDashboard dashboard = useCase.execute();
 
@@ -76,10 +79,28 @@ class GetSignalsDashboardUseCaseTest {
         assertThat(dashboard.signals()).hasSize(2);
     }
 
+    /**
+     * N+1 regression: the dashboard must ask the repository for every held ticker's latest
+     * snapshot in a single {@code findLatestForAll} call, never by looping a single-ticker finder
+     * once per held ticker — the latter turns an O(1) query into an O(N) one regardless of how
+     * efficient each individual call is.
+     */
+    @Test
+    void fetchesTheLatestSnapshotForEveryHeldTickerInOneCall() {
+        when(transactionRepository.findAll()).thenReturn(List.of(holding(QQQ), holding(TSLA), holding(EC)));
+        when(snapshotRepository.findLatestForAll(Set.of(QQQ, TSLA, EC))).thenReturn(Map.of(
+                QQQ, snapshot(QQQ, Map.of(SignalSource.TECHNICAL, new BigDecimal("5")))));
+
+        useCase.execute();
+
+        verify(snapshotRepository, times(1)).findLatestForAll(Set.of(QQQ, TSLA, EC));
+        verify(snapshotRepository, never()).findLatest(any(Ticker.class));
+    }
+
     @Test
     void treatsATickerWithNoStoredSnapshotAsWithoutData() {
         when(transactionRepository.findAll()).thenReturn(List.of(holding(QQQ)));
-        when(snapshotRepository.findLatest(QQQ)).thenReturn(Optional.empty());
+        when(snapshotRepository.findLatestForAll(Set.of(QQQ))).thenReturn(Map.of());
 
         SignalsDashboard dashboard = useCase.execute();
 
@@ -90,6 +111,7 @@ class GetSignalsDashboardUseCaseTest {
     @Test
     void anEmptyPortfolioProducesAnEmptyDashboard() {
         when(transactionRepository.findAll()).thenReturn(List.of());
+        when(snapshotRepository.findLatestForAll(Set.of())).thenReturn(Map.of());
 
         SignalsDashboard dashboard = useCase.execute();
 

@@ -18,6 +18,13 @@ import java.util.stream.Collectors;
  * {@link SignalsDashboard#tickersWithoutData()} and excluded from the average and the level counts:
  * a zero-source score maps to a strong sell, and including it would fabricate a recommendation
  * nobody made.
+ *
+ * <p>The latest snapshot for every held ticker is fetched in a single
+ * {@link SignalSnapshotRepository#findLatestForAll} call rather than looped one ticker at a time:
+ * looping {@code findLatest} turned a single-query dashboard build into one query (plus a lazy
+ * association load) per held ticker — an N+1 of the same shape an earlier fix already closed on a
+ * different finder, missed here because "this finder returns at most one row" is not the same
+ * question as "how many times does this use case call it".
  */
 public class GetSignalsDashboardUseCase {
 
@@ -34,12 +41,13 @@ public class GetSignalsDashboardUseCase {
 
     public SignalsDashboard execute() {
         Set<Ticker> held = heldTickers();
+        Map<Ticker, SignalSnapshot> latestByTicker = snapshotRepository.findLatestForAll(held);
 
         List<TickerSignal> signals = new ArrayList<>();
         List<Ticker> withoutData = new ArrayList<>();
 
         for (Ticker ticker : held) {
-            SignalSnapshot snapshot = snapshotRepository.findLatest(ticker)
+            SignalSnapshot snapshot = Optional.ofNullable(latestByTicker.get(ticker))
                     .orElseGet(() -> SignalSnapshot.builder()
                             .ticker(ticker).snapshotDate(LocalDate.EPOCH).scores(Map.of()).build());
             CombinedScore score = CombinedScore.from(snapshot);

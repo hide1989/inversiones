@@ -4,6 +4,8 @@ import co.com.david.inversiones.model.SignalSnapshot;
 import co.com.david.inversiones.model.SignalSource;
 import co.com.david.inversiones.model.Ticker;
 import co.com.david.inversiones.model.exception.UnknownCatalogEntryException;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -11,6 +13,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -18,7 +21,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,6 +38,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({SignalSnapshotRepositoryAdapter.class,
         co.com.david.inversiones.jpa.instrument.InstrumentRepositoryAdapter.class})
+// Enabled only so findLatestForAllIssuesAConstantNumberOfQueriesRegardlessOfTickerCount can assert
+// a hard SQL-statement-count bound below, proving the batched query actually prevents the 1 + 2N
+// shape the N+1 regression test in GetSignalsDashboardUseCaseTest only proves at the mock level.
+@TestPropertySource(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 class SignalSnapshotRepositoryAdapterTest {
 
     @Container
@@ -217,6 +226,63 @@ class SignalSnapshotRepositoryAdapterTest {
                         Long.class)
                 .getSingleResult();
         assertThat(count).isZero();
+    }
+
+    @Test
+    void findLatestForAllReturnsTheMostRecentSnapshotPerTickerAndOmitsTickersWithNone() {
+        save("QQQ", LocalDate.of(2026, 4, 1), "4.0");
+        save("QQQ", LocalDate.of(2026, 4, 3), "6.0");
+        save("VOO", LocalDate.of(2026, 4, 2), "5.0");
+        entityManager.flush();
+        entityManager.clear();
+
+        Map<Ticker, SignalSnapshot> latest = adapter.findLatestForAll(
+                Set.of(Ticker.of("QQQ"), Ticker.of("VOO"), Ticker.of("MSFT")));
+
+        assertThat(latest).containsOnlyKeys(Ticker.of("QQQ"), Ticker.of("VOO"));
+        assertThat(latest.get(Ticker.of("QQQ")).snapshotDate()).isEqualTo(LocalDate.of(2026, 4, 3));
+        assertThat(latest.get(Ticker.of("QQQ")).scoreOf(SignalSource.TECHNICAL).orElseThrow())
+                .isEqualByComparingTo("6.0");
+        assertThat(latest.get(Ticker.of("VOO")).snapshotDate()).isEqualTo(LocalDate.of(2026, 4, 2));
+    }
+
+    @Test
+    void findLatestForAllOnAnEmptySetReturnsAnEmptyMapWithoutQuerying() {
+        Map<Ticker, SignalSnapshot> latest = adapter.findLatestForAll(Set.of());
+
+        assertThat(latest).isEmpty();
+    }
+
+    /**
+     * Proves the Critical N+1 fix end to end: before {@code findLatestForAll} existed,
+     * {@code GetSignalsDashboardUseCase} looping {@code findLatest} once per held ticker issued
+     * 1 + 2N statements over N held tickers (N calls, each a SELECT plus a lazy {@code instrument}
+     * load, after the single query for the held tickers themselves — see the class Javadoc on
+     * {@link SignalSnapshotRepositoryAdapter}). A single {@code findLatestForAll} call must stay at
+     * one statement regardless of how many tickers are asked for, the same bound
+     * {@code TransactionRepositoryAdapterTest} proves for its own batched finder.
+     */
+    @Test
+    void findLatestForAllIssuesAConstantNumberOfQueriesRegardlessOfTickerCount() {
+        for (String ticker : List.of("QQQ", "VOO", "GLD", "SMH", "JPM")) {
+            save(ticker, LocalDate.of(2026, 9, 1), "5.0");
+        }
+        entityManager.flush();
+        entityManager.clear();
+        Statistics statistics = entityManager.getEntityManager()
+                .getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+
+        Set<Ticker> tickers = Set.of(Ticker.of("QQQ"), Ticker.of("VOO"), Ticker.of("GLD"),
+                Ticker.of("SMH"), Ticker.of("JPM"));
+        Map<Ticker, SignalSnapshot> latest = adapter.findLatestForAll(tickers);
+
+        assertThat(latest).hasSize(5);
+        assertThat(statistics.getPrepareStatementCount())
+                .as("findLatestForAll() over %d tickers should issue one statement, not one per ticker",
+                        tickers.size())
+                .isLessThanOrEqualTo(1);
     }
 
     private SignalSnapshot save(String ticker, LocalDate date, String technicalScore) {
