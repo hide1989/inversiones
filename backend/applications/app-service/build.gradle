@@ -54,6 +54,11 @@ dependencies {
     // org.springframework.boot.resttestclient) lives in its own artifact rather than arriving
     // transitively through spring-boot-starter-test.
     acceptanceTestImplementation 'org.springframework.boot:spring-boot-resttestclient'
+    // rest-consumer depends on resilience4j as `implementation`, so it is not exposed transitively
+    // here; WireMockSupport needs CircuitBreakerRegistry directly to reset breaker state between
+    // scenarios. Same version as rest-consumer's resilience4j-spring-boot4, which is itself not
+    // managed by Spring Boot's BOM.
+    acceptanceTestImplementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.4.0'
 }
 
 tasks.register('acceptanceTest', Test) {

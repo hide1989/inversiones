@@ -4,6 +4,8 @@ import co.com.david.inversiones.model.ExchangeRate;
 import co.com.david.inversiones.model.gateways.ExchangeRateProvider;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /** {@link ExchangeRateProvider} backed by n8n's {@code /trm-hoy} workflow. */
 @Component
 public class ExchangeRateProviderAdapter implements ExchangeRateProvider {
@@ -15,7 +17,7 @@ public class ExchangeRateProviderAdapter implements ExchangeRateProvider {
     }
 
     @Override
-    public ExchangeRate currentCopPerUsd() {
+    public Optional<ExchangeRate> currentCopPerUsd() {
         return cacheSource.currentRate();
     }
 }

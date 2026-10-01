@@ -3,6 +3,7 @@ package co.com.david.inversiones.usecase.portfolio;
 import co.com.david.inversiones.model.*;
 import co.com.david.inversiones.model.gateways.ExchangeRateProvider;
 import co.com.david.inversiones.model.gateways.InstrumentRepository;
+import co.com.david.inversiones.model.gateways.TimeProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -30,10 +31,12 @@ class CalculateTotalReturnUseCaseTest {
     private InstrumentRepository instrumentRepository;
     @Mock
     private ExchangeRateProvider exchangeRateProvider;
+    @Mock
+    private TimeProvider timeProvider;
 
     private CalculateTotalReturnUseCase useCase() {
         return new CalculateTotalReturnUseCase(
-                getPortfolio, instrumentRepository, exchangeRateProvider, BASE_TRM);
+                getPortfolio, instrumentRepository, exchangeRateProvider, timeProvider, BASE_TRM);
     }
 
     private static ValuedPosition position(String ticker, String broker, String cost, String marketValue) {
@@ -87,7 +90,7 @@ class CalculateTotalReturnUseCaseTest {
                 .totalUnrealizedPnl(Money.usd("0")).unpricedTickers(List.of())
                 .baseCurrency(Currency.USD)
                 .build());
-        when(exchangeRateProvider.currentCopPerUsd()).thenReturn(CURRENT);
+        when(exchangeRateProvider.currentCopPerUsd()).thenReturn(Optional.of(CURRENT));
     }
 
     // Note on stubbing: `segmentOf` consults the instrument catalog ONLY for positions held at
@@ -100,12 +103,14 @@ class CalculateTotalReturnUseCaseTest {
         TotalReturn result = useCase().execute();
 
         // Asset gain: 100 USD x 3912.40
-        assertThat(result.assetGainInCop().amount()).isEqualByComparingTo("391240");
+        assertThat(result.assetGainInCop()).isPresent();
+        assertThat(result.assetGainInCop().orElseThrow().amount()).isEqualByComparingTo("391240");
         // Exchange effect: 300 USD invested x (3912.40 - 3568.42)
-        assertThat(result.exchangeEffect().amount()).isEqualByComparingTo("103194");
-        assertThat(result.totalReturnInCop().amount()).isEqualByComparingTo("494434");
+        assertThat(result.exchangeEffect()).isPresent();
+        assertThat(result.exchangeEffect().orElseThrow().amount()).isEqualByComparingTo("103194");
+        assertThat(result.totalReturnInCop().orElseThrow().amount()).isEqualByComparingTo("494434");
         assertThat(result.baseRate().rate()).isEqualByComparingTo(BASE_TRM);
-        assertThat(result.currentRate()).isEqualTo(CURRENT);
+        assertThat(result.currentRate()).contains(CURRENT);
     }
 
     @Test
@@ -131,14 +136,14 @@ class CalculateTotalReturnUseCaseTest {
 
         TotalReturn result = useCase().execute();
 
-        assertThat(result.exchangeEffect().isZero()).isTrue();
-        assertThat(result.totalReturnInCop().amount()).isEqualByComparingTo("30");
+        assertThat(result.exchangeEffect().orElseThrow().isZero()).isTrue();
+        assertThat(result.totalReturnInCop().orElseThrow().amount()).isEqualByComparingTo("30");
     }
 
     @Test
     void aFallingExchangeRateProducesANegativeExchangeEffect() {
         when(exchangeRateProvider.currentCopPerUsd())
-                .thenReturn(ExchangeRate.copPerUsd(new BigDecimal("3400.00"), TODAY));
+                .thenReturn(Optional.of(ExchangeRate.copPerUsd(new BigDecimal("3400.00"), TODAY)));
         when(getPortfolio.execute()).thenReturn(PortfolioValuation.builder()
                 .positions(List.of(position("QQQ", "Hapi", "300.00", "300.00")))
                 .totalInvested(Money.usd("300")).totalMarketValue(Money.usd("300"))
@@ -149,8 +154,8 @@ class CalculateTotalReturnUseCaseTest {
         TotalReturn result = useCase().execute();
 
         // 300 x (3400.00 - 3568.42)
-        assertThat(result.exchangeEffect().amount()).isEqualByComparingTo("-50526");
-        assertThat(result.exchangeEffect().isNegative()).isTrue();
+        assertThat(result.exchangeEffect().orElseThrow().amount()).isEqualByComparingTo("-50526");
+        assertThat(result.exchangeEffect().orElseThrow().isNegative()).isTrue();
     }
 
     @Test
@@ -184,8 +189,38 @@ class CalculateTotalReturnUseCaseTest {
         TotalReturn result = useCase().execute();
 
         assertThat(result.segments()).isEmpty();
-        assertThat(result.assetGainInCop().isZero()).isTrue();
-        assertThat(result.exchangeEffect().isZero()).isTrue();
-        assertThat(result.totalReturnInCop().isZero()).isTrue();
+        assertThat(result.assetGainInCop().orElseThrow().isZero()).isTrue();
+        assertThat(result.exchangeEffect().orElseThrow().isZero()).isTrue();
+        assertThat(result.totalReturnInCop().orElseThrow().isZero()).isTrue();
+    }
+
+    /**
+     * Critical-defect regression. Before the fix, an unreachable TRM source made this use case
+     * receive a fabricated rate equal to {@code baseTrm}, which made {@code exchangeEffect} come
+     * out as an exact zero — "no currency effect" when the truth was "the rate is unknown". The fix
+     * is {@link ExchangeRateProvider#currentCopPerUsd()} returning {@link Optional#empty()}, which
+     * must propagate as an absent {@code exchangeEffect}/{@code assetGainInCop}/
+     * {@code totalReturnInCop}/{@code currentRate} — never as zero and never as a value.
+     */
+    @Test
+    void reportsTheCurrencyEffectAsUnavailableRatherThanZeroWhenTheRateIsUnknown() {
+        when(exchangeRateProvider.currentCopPerUsd()).thenReturn(Optional.empty());
+        when(getPortfolio.execute()).thenReturn(PortfolioValuation.builder()
+                .positions(List.of(position("QQQ", "Hapi", "300.00", "400.00")))
+                .totalInvested(Money.usd("300")).totalMarketValue(Money.usd("400"))
+                .totalUnrealizedPnl(Money.usd("100")).unpricedTickers(List.of())
+                .baseCurrency(Currency.USD)
+                .build());
+        when(timeProvider.today()).thenReturn(TODAY);
+
+        TotalReturn result = useCase().execute();
+
+        assertThat(result.currentRate()).isEmpty();
+        assertThat(result.exchangeEffect()).isEmpty();
+        assertThat(result.assetGainInCop()).isEmpty();
+        assertThat(result.totalReturnInCop()).isEmpty();
+        // The base rate is still a known constant; only its stamped date falls back to today.
+        assertThat(result.baseRate().rate()).isEqualByComparingTo(BASE_TRM);
+        assertThat(result.baseRate().rateDate()).isEqualTo(TODAY);
     }
 }

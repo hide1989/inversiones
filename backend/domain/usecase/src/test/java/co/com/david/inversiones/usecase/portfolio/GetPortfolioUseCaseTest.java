@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,7 +145,7 @@ class GetPortfolioUseCaseTest {
         when(quoteProvider.findQuotes(Set.of(QQQ, terpel))).thenReturn(Map.of(
                 QQQ, quote(QQQ, "150.00", "0.82"),
                 terpel, new Quote(terpel, Money.cop("20000.00"), Percentage.of("1.5"))));
-        when(exchangeRateProvider.currentCopPerUsd()).thenReturn(TRM);
+        when(exchangeRateProvider.currentCopPerUsd()).thenReturn(Optional.of(TRM));
 
         PortfolioValuation valuation = useCase.execute();
 
@@ -163,7 +164,7 @@ class GetPortfolioUseCaseTest {
         when(transactionRepository.findAll()).thenReturn(List.of(buyCop(terpel, "Trii", "25", "16000.00")));
         when(quoteProvider.findQuotes(Set.of(terpel))).thenReturn(Map.of(
                 terpel, new Quote(terpel, Money.cop("20000.00"), Percentage.of("1.5"))));
-        when(exchangeRateProvider.currentCopPerUsd()).thenReturn(TRM);
+        when(exchangeRateProvider.currentCopPerUsd()).thenReturn(Optional.of(TRM));
 
         ValuedPosition valued = useCase.execute().positions().getFirst();
 
@@ -174,6 +175,28 @@ class GetPortfolioUseCaseTest {
         assertThat(valued.costInBaseCurrency().amount()).isEqualByComparingTo("100");
         // The native percentage is unaffected by the rate.
         assertThat(valued.unrealizedPnlPercent().value()).isEqualByComparingTo("25.0000");
+    }
+
+    /**
+     * Critical-defect regression: when the exchange rate cannot be obtained, a peso position that
+     * needs it to be expressed in the base currency must come back unpriced (the same concept a
+     * missing quote already uses) rather than valued with a fabricated rate.
+     */
+    @Test
+    void reportsAPesoPositionUnpricedWhenTheExchangeRateIsUnavailable() {
+        Ticker terpel = Ticker.of("TERPEL");
+        when(transactionRepository.findAll()).thenReturn(List.of(buyCop(terpel, "Trii", "25", "16000.00")));
+        when(quoteProvider.findQuotes(Set.of(terpel))).thenReturn(Map.of(
+                terpel, new Quote(terpel, Money.cop("20000.00"), Percentage.of("1.5"))));
+        when(exchangeRateProvider.currentCopPerUsd()).thenReturn(Optional.empty());
+
+        PortfolioValuation valuation = useCase.execute();
+
+        ValuedPosition valued = valuation.positions().getFirst();
+        assertThat(valued.priced()).isFalse();
+        assertThat(valuation.unpricedTickers()).containsExactly(terpel);
+        assertThat(valuation.totalMarketValue().isZero()).isTrue();
+        assertThat(valuation.totalInvested().isZero()).isTrue();
     }
 
     @Test

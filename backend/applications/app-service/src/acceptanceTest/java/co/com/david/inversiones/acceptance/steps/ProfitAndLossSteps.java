@@ -48,6 +48,14 @@ public class ProfitAndLossSteps {
         wireMock.stubJson("/trm-hoy", "{\"trm\": " + rate + "}");
     }
 
+    @Given("the TRM source is down")
+    public void theTrmSourceIsDown() {
+        wireMock.stubFailure("/trm-hoy");
+        // The prior step already requested the portfolio, which may have populated the TRM cache
+        // with a real rate; evict it so this scenario actually observes the failure.
+        wireMock.evictTrmCache();
+    }
+
     @When("the user requests the total return report")
     public void theUserRequestsTheTotalReturnReport() {
         state.lastResponse(api.get("/portfolio/returns", state.token()));
@@ -73,6 +81,30 @@ public class ProfitAndLossSteps {
         assertThat(totalCurrency).isEqualTo("COP");
         assertThat(assetGainCurrency).isEqualTo("COP");
         assertThat(exchangeEffectCurrency).isEqualTo("COP");
+    }
+
+    /**
+     * The Critical-defect regression, end to end: before the fix, an unreachable TRM source made
+     * the API fall back to the configured base TRM stamped with today's date, which made
+     * {@code exchangeEffect} come out as an exact, confident zero. This asserts the opposite — the
+     * field is absent from the JSON altogether, and {@code currencyEffectAvailable} says why, so a
+     * client cannot mistake "unknown" for "no currency movement".
+     */
+    @Then("the exchange rate effect is reported as unavailable rather than zero")
+    public void theExchangeRateEffectIsReportedAsUnavailableRatherThanZero() {
+        String body = state.lastResponse().getBody();
+        Boolean currencyEffectAvailable = JsonPath.read(body, "$.currencyEffectAvailable");
+        assertThat(currencyEffectAvailable).as("currencyEffectAvailable: %s", body).isFalse();
+        // null, not a zero amount: a present-but-zero exchangeEffect is exactly the defect this
+        // scenario exists to catch, so the field must be JSON null (and current rate too).
+        assertThat((Object) JsonPath.read(body, "$.exchangeEffect"))
+                .as("exchangeEffect must be null, not a zero amount: %s", body).isNull();
+        assertThat((Object) JsonPath.read(body, "$.currentRate"))
+                .as("currentRate must be null when the TRM source is down: %s", body).isNull();
+        assertThat((Object) JsonPath.read(body, "$.assetGainInCop"))
+                .as("assetGainInCop must be null when the rate is unknown: %s", body).isNull();
+        assertThat((Object) JsonPath.read(body, "$.totalReturnInCop"))
+                .as("totalReturnInCop must be null when the rate is unknown: %s", body).isNull();
     }
 
     @Then("every monetary amount in the response is encoded as a JSON string")

@@ -19,6 +19,7 @@ import org.springframework.web.context.WebApplicationContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -137,10 +138,10 @@ class PortfolioControllerTest {
         TotalReturn totalReturn = TotalReturn.builder()
                 .segments(List.of())
                 .baseRate(baseRate)
-                .currentRate(currentRate)
-                .exchangeEffect(Money.cop("1000000"))
-                .assetGainInCop(Money.cop("500000"))
-                .totalReturnInCop(Money.cop("1500000"))
+                .currentRate(Optional.of(currentRate))
+                .exchangeEffect(Optional.of(Money.cop("1000000")))
+                .assetGainInCop(Optional.of(Money.cop("500000")))
+                .totalReturnInCop(Optional.of(Money.cop("1500000")))
                 .build();
         when(calculateTotalReturn.execute()).thenReturn(totalReturn);
 
@@ -150,6 +151,36 @@ class PortfolioControllerTest {
                 .andExpect(jsonPath("$.exchangeEffect.amount").value("1000000.0000000000"))
                 .andExpect(jsonPath("$.exchangeEffect.currency").value("COP"))
                 .andExpect(jsonPath("$.baseRate.rate").value("4000"))
-                .andExpect(jsonPath("$.currentRate.rate").value("4200"));
+                .andExpect(jsonPath("$.currentRate.rate").value("4200"))
+                .andExpect(jsonPath("$.currencyEffectAvailable").value(true));
+    }
+
+    /**
+     * Critical-defect regression at the wire boundary: when the TRM source is down,
+     * {@code exchangeEffect} must be absent from the JSON (and {@code currencyEffectAvailable}
+     * must say so explicitly), never rendered as a zero amount that a client could mistake for "no
+     * currency movement".
+     */
+    @Test
+    void returnsReportsTheCurrencyEffectAsUnavailableWhenTheRateIsUnknown() throws Exception {
+        ExchangeRate baseRate = ExchangeRate.copPerUsd(new BigDecimal("4000"), LocalDate.of(2026, 9, 30));
+        TotalReturn totalReturn = TotalReturn.builder()
+                .segments(List.of())
+                .baseRate(baseRate)
+                .currentRate(Optional.empty())
+                .exchangeEffect(Optional.empty())
+                .assetGainInCop(Optional.empty())
+                .totalReturnInCop(Optional.empty())
+                .build();
+        when(calculateTotalReturn.execute()).thenReturn(totalReturn);
+
+        mockMvc.perform(get("/api/v1/portfolio/returns")
+                        .header("Authorization", "Bearer " + ApiTestContext.issueToken(jwtEncoder, "david")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currencyEffectAvailable").value(false))
+                .andExpect(jsonPath("$.exchangeEffect").doesNotExist())
+                .andExpect(jsonPath("$.assetGainInCop").doesNotExist())
+                .andExpect(jsonPath("$.totalReturnInCop").doesNotExist())
+                .andExpect(jsonPath("$.currentRate").doesNotExist());
     }
 }

@@ -19,11 +19,11 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Unit tests against the real {@code /trm-hoy} payload captured in {@code src/test/resources/n8n}.
@@ -47,8 +47,7 @@ class ExchangeRateProviderAdapterTest {
         mockWebServer.start();
         RestClient restClient = TestRestClients.forMockServer(mockWebServer);
         N8nGateway gateway = new N8nGateway(restClient, restClient);
-        ExchangeRateCacheSource cacheSource =
-                new ExchangeRateCacheSource(gateway, timeProvider, new BigDecimal("3568.42"));
+        ExchangeRateCacheSource cacheSource = new ExchangeRateCacheSource(gateway, timeProvider);
         adapter = new ExchangeRateProviderAdapter(cacheSource);
     }
 
@@ -64,21 +63,28 @@ class ExchangeRateProviderAdapterTest {
                 .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .setBody(Fixtures.load("trm-hoy")));
 
-        ExchangeRate rate = adapter.currentCopPerUsd();
+        ExchangeRate rate = adapter.currentCopPerUsd().orElseThrow();
 
         assertThat(rate.rate()).isEqualByComparingTo("3366.901593");
         assertThat(rate.rateDate()).isEqualTo(LocalDate.of(2026, 9, 30));
     }
 
+    /**
+     * Corrected from the pre-fix behaviour: this used to assert the adapter fell back to the
+     * configured base TRM, stamped with today's date, and treated that as an acceptable "reading".
+     * That fallback was the Critical defect (a fabricated rate presented as today's real TRM,
+     * which made {@code CalculateTotalReturnUseCase} report an exact zero currency effect while the
+     * true rate was simply unknown). The fix removes the fallback entirely: when {@code /trm-hoy}
+     * is unreachable even after retries, the adapter now reports the rate as absent.
+     */
     @Test
-    void fallsBackToTheConfiguredBaseTrmWhenTrmHoyIsUnreachable() {
+    void reportsTheRateAsAbsentWhenTrmHoyIsUnreachable() {
         mockWebServer.enqueue(new MockResponse().setResponseCode(HttpStatus.INTERNAL_SERVER_ERROR.value()));
         mockWebServer.enqueue(new MockResponse().setResponseCode(HttpStatus.INTERNAL_SERVER_ERROR.value()));
-        when(timeProvider.today()).thenReturn(LocalDate.of(2026, 9, 30));
 
-        ExchangeRate rate = adapter.currentCopPerUsd();
+        Optional<ExchangeRate> rate = adapter.currentCopPerUsd();
 
-        assertThat(rate.rate()).isEqualByComparingTo("3568.42");
-        assertThat(rate.rateDate()).isEqualTo(LocalDate.of(2026, 9, 30));
+        assertThat(rate).isEmpty();
+        verifyNoInteractions(timeProvider);
     }
 }

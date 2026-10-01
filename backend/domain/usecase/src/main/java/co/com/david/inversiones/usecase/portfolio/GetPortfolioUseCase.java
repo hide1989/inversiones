@@ -19,7 +19,10 @@ import java.util.stream.Collectors;
  *
  * <p>Positions keep their native amounts. Every portfolio-wide aggregate is expressed in
  * {@link #BASE_CURRENCY}, converted with the TRM obtained from {@link ExchangeRateProvider} only
- * when at least one position is not already denominated in it.
+ * when at least one position is not already denominated in it. When that rate cannot be obtained,
+ * a position that needed it to be expressed in {@link #BASE_CURRENCY} is reported unpriced — the
+ * same signal used for a missing market quote — rather than valued with a substitute rate; see
+ * {@link #isConvertible}.
  */
 public class GetPortfolioUseCase {
 
@@ -47,7 +50,9 @@ public class GetPortfolioUseCase {
 
         boolean needsConversion = openPositions.stream()
                 .anyMatch(position -> position.totalCost().currency() != BASE_CURRENCY);
-        ExchangeRate rate = needsConversion ? exchangeRateProvider.currentCopPerUsd() : null;
+        Optional<ExchangeRate> rate = needsConversion
+                ? exchangeRateProvider.currentCopPerUsd()
+                : Optional.empty();
 
         List<ValuedPosition> valued = openPositions.stream()
                 .map(position -> value(position, quotes.get(position.ticker()), rate))
@@ -77,9 +82,12 @@ public class GetPortfolioUseCase {
                 .build();
     }
 
-    private ValuedPosition value(Position position, Quote quote, ExchangeRate rate) {
+    private ValuedPosition value(Position position, Quote quote, Optional<ExchangeRate> rate) {
+        boolean convertible = isConvertible(position.totalCost(), rate);
         if (quote == null) {
-            Money costInBase = toBaseCurrency(position.totalCost(), rate);
+            Money costInBase = convertible
+                    ? toBaseCurrency(position.totalCost(), rate)
+                    : Money.zero(BASE_CURRENCY);
             return ValuedPosition.builder()
                     .position(position)
                     .marketValue(position.totalCost())
@@ -99,22 +107,46 @@ public class GetPortfolioUseCase {
                 .unrealizedPnl(unrealizedPnl)
                 .unrealizedPnlPercent(Percentage.between(unrealizedPnl, position.totalCost()))
                 .dayChangePercent(quote.dayChangePercent())
-                .priced(true)
-                .costInBaseCurrency(toBaseCurrency(position.totalCost(), rate))
-                .marketValueInBaseCurrency(toBaseCurrency(marketValue, rate))
+                .priced(convertible)
+                .costInBaseCurrency(convertible
+                        ? toBaseCurrency(position.totalCost(), rate)
+                        : Money.zero(BASE_CURRENCY))
+                .marketValueInBaseCurrency(convertible
+                        ? toBaseCurrency(marketValue, rate)
+                        : Money.zero(BASE_CURRENCY))
                 .build();
+    }
+
+    /**
+     * Whether {@code amount} can be expressed in {@link #BASE_CURRENCY}: trivially true when it is
+     * already in that currency, otherwise only when a rate is available to convert it with.
+     *
+     * <p>This is the seam where the Critical fix lands. A rate that could not be obtained from
+     * {@link ExchangeRateProvider} used to be silently replaced by a fabricated one, so this method
+     * — and therefore this whole class — never had to consider the "no rate" case. Now it does:
+     * a position that needs a rate to be valued in the base currency and does not have one is
+     * exactly like a position with no market quote, and is reported the same honest way, by reusing
+     * {@link ValuedPosition#priced()} rather than inventing a second, parallel "unavailable" concept.
+     */
+    private boolean isConvertible(Money amount, Optional<ExchangeRate> rate) {
+        return amount.currency() == BASE_CURRENCY || rate.isPresent();
     }
 
     /**
      * Converts an amount into {@link #BASE_CURRENCY}.
      *
      * <p>The rate converts USD into COP, so a peso amount is divided by it rather than multiplied.
+     * Callers must only invoke this when {@link #isConvertible} already returned {@code true} for
+     * the same amount and rate; the arithmetic for a present rate is unchanged from before this
+     * class had to consider absence at all.
      */
-    private Money toBaseCurrency(Money amount, ExchangeRate rate) {
+    private Money toBaseCurrency(Money amount, Optional<ExchangeRate> rate) {
         if (amount.currency() == BASE_CURRENCY) {
             return amount;
         }
-        return Money.of(amount.amount().divide(rate.rate(), Money.SCALE, RoundingMode.HALF_UP),
+        ExchangeRate presentRate = rate.orElseThrow(() -> new IllegalStateException(
+                "toBaseCurrency called with no rate for a non-base-currency amount"));
+        return Money.of(amount.amount().divide(presentRate.rate(), Money.SCALE, RoundingMode.HALF_UP),
                 BASE_CURRENCY);
     }
 }

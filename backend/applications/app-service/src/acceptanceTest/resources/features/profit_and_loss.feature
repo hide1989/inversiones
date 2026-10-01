@@ -15,3 +15,10 @@ Feature: Portfolio profit and loss with the exchange effect reported separately
     And the asset gain and the exchange rate effect are reported as separate amounts
     And the portfolio total is expressed in a single declared base currency
     And every monetary amount in the response is encoded as a JSON string
+
+  Scenario: The exchange rate effect is reported unavailable, not zero, when the TRM source is down
+    Given the seeded portfolio holds QQQ at Hapi in dollars and TERPEL at Trii in pesos
+    And the TRM source is down
+    When the user requests the total return report
+    Then the response has status 200
+    And the exchange rate effect is reported as unavailable rather than zero
