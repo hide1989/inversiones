@@ -28,11 +28,17 @@ RUN chmod +x gradlew
 # to be named; the real build below is what must succeed.
 RUN ./gradlew --no-daemon dependencies || true
 
-# Layer 2: the actual source, then build the boot jar. `validateStructure` runs
-# as part of `build`'s task graph via the clean-architecture plugin, so a
-# domain module that picked up a framework dependency fails the image build.
+# Layer 2: the actual source, then build the boot jar. `validateStructure` is
+# named explicitly here, not assumed from `bootJar`'s own task graph: a prior
+# version of this file claimed `validateStructure` "runs as part of `build`'s
+# task graph", but the command below never invoked `build` at all, so that
+# check never ran and a domain module that picked up a framework dependency
+# would have produced a green image build. Naming the task directly makes the
+# claim true instead of removing it, since the whole point of running this
+# check at image-build time is to fail the image, not just the local build,
+# when a module crosses a layer it must not.
 COPY . .
-RUN ./gradlew --no-daemon :app-service:bootJar -x test -x acceptanceTest
+RUN ./gradlew --no-daemon validateStructure :app-service:bootJar -x test -x acceptanceTest
 
 # ---------------------------------------------------------------------------
 # Runtime stage: JRE only, non-root, sized to the container's memory limit.

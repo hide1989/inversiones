@@ -1,0 +1,14 @@
+# Keeps the image build reproducible: without this file, `COPY . .` in
+# deployment/Dockerfile ships the host's own build tree into the build stage
+# before Gradle ever runs, so Gradle's up-to-date checks can be satisfied by
+# host-compiled classes and a stale jar instead of a fresh compile. The build
+# stage must only ever see source, never anything a previous local build or
+# IDE run left behind.
+**/build/
+**/build-cache/
+**/.gradle/
+.git/
+.idea/
+.superpowers/
+deploy/.env
+frontend/node_modules/
