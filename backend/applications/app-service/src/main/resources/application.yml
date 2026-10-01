@@ -140,7 +140,14 @@ inversiones:
     read-timeout: 30s
     slow-read-timeout: ${N8N_SLOW_READ_TIMEOUT:90s}
   security:
-    jwt-secret: ${JWT_SECRET:local-development-secret-change-me-32bytes}
+    # No default here, deliberately: a default visible to every profile is a default a real
+    # deployment can boot on without ever being asked to set JWT_SECRET. The local-only default
+    # lives in application-local.yml instead, so any profile other than "local" fails fast at
+    # context startup ("Could not resolve placeholder 'JWT_SECRET'") rather than silently signing
+    # tokens with a value published in this repository. JwtCodecConfig additionally rejects that
+    # exact committed value outright if it is ever copy-pasted into JWT_SECRET for a non-local
+    # profile, so even an explicit misconfiguration cannot pass the check.
+    jwt-secret: ${JWT_SECRET}
     jwt-expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
     # Exact origins allowed to call this API cross-origin; no wildcard. Defaults to the Vite dev
     # server Plan 3 runs.

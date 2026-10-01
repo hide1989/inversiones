@@ -4,6 +4,13 @@ spring:
     username: ${POSTGRES_USER:inversiones}
     password: ${POSTGRES_PASSWORD:inversiones_local}
 
+inversiones:
+  security:
+    # Local-only default so `./gradlew bootRun` and the composed stack need no manual setup step.
+    # This value is intentionally public (it is committed to this repository); JwtCodecConfig
+    # refuses to accept it outside the "local" profile, so it can never become a real signing key.
+    jwt-secret: ${JWT_SECRET:local-development-secret-change-me-32bytes}
+
 logging:
   level:
     co.com.david.inversiones: DEBUG
