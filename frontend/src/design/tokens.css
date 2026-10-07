@@ -1,0 +1,65 @@
+/*
+ * Design tokens for the dark financial terminal aesthetic.
+ *
+ * Every colour, space, radius and type size lives here as a CSS custom
+ * property, declared inside `@theme` so Tailwind 4 turns each one into both
+ * a plain `:root` variable (Tailwind compiles `@theme` entries onto `:root`)
+ * and a set of utility classes (`bg-ground`, `text-fg-muted`, `rounded-sm`,
+ * `text-sm`, …). Components must reference these utilities or `var(...)`
+ * names — no hex literal belongs in a component.
+ *
+ * Contrast for every text-on-background pair below is verified in
+ * src/design/__tests__/contrast.test.ts, computed from these exact values.
+ */
+
+@theme {
+  /* ---- colour: ground & surfaces (elevation by lightness, not borders) --- */
+  --color-ground: #0a0b0d;
+  --color-surface-1: #14161b;
+  --color-surface-2: #1b1e24;
+  --color-surface-3: #242730;
+
+  /* ---- colour: text --------------------------------------------------- */
+  --color-fg: #e6e8ec; /* primary text: figures, tickers, headings */
+  --color-fg-muted: #a7adb8; /* secondary text: labels, column headers */
+  --color-fg-subtle: #6b7280; /* placeholders, disabled text, hints only */
+
+  /* ---- colour: single accent ------------------------------------------ */
+  --color-accent: #f5a524;
+  --color-accent-fg: #1a1200; /* text/icon placed on top of the accent */
+
+  /* ---- colour: semantic sign (never decorative) ------------------------ */
+  --color-positive: #36b37e;
+  --color-negative: #f2574c;
+
+  /* ---- colour: structure ------------------------------------------------ */
+  --color-border: #2a2d35; /* minimal use: a single hairline, not a frame */
+  --color-focus-ring: #f5a524;
+
+  /* ---- type: families --------------------------------------------------- */
+  --font-mono:
+    'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Liberation Mono', monospace;
+  --font-sans:
+    'IBM Plex Sans', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+
+  /* ---- type: scale (tight, for density) --------------------------------- */
+  --text-xs: 0.6875rem; /* 11px */
+  --text-sm: 0.75rem; /* 12px */
+  --text-base: 0.8125rem; /* 13px */
+  --text-md: 0.875rem; /* 14px */
+  --text-lg: 1rem; /* 16px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.75rem; /* 28px */
+
+  /* ---- radius: sharp, not rounded-everything ---------------------------- */
+  --radius-sm: 0.125rem; /* 2px */
+  --radius-md: 0.25rem; /* 4px */
+  --radius-lg: 0.5rem; /* 8px */
+
+  /* ---- space: component-specific gaps (beyond Tailwind's default scale) */
+  --spacing-cell-x: 0.5rem; /* 8px horizontal cell padding, tight tables */
+  --spacing-row-y: 0.25rem; /* 4px vertical row padding, tight tables */
+  --spacing-gutter: 1rem; /* 16px panel gutter */
+}

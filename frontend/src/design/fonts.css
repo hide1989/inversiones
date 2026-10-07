@@ -1,0 +1,13 @@
+/*
+ * The two faces the terminal aesthetic is built on, designed together by
+ * IBM Plex: Mono carries every figure, ticker and label; Sans is reserved
+ * for prose longer than a label (AI synthesis summaries, empty states).
+ * Both load from Google Fonts with `display=swap` so text paints with the
+ * fallback stack immediately and swaps in once the webfont is ready.
+ *
+ * Fallback stacks (declared in tokens.css as --font-mono / --font-sans) are
+ * real, ordered system stacks — never a bare `sans-serif` that silently
+ * resolves to Arial.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap');

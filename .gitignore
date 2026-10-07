@@ -18,6 +18,7 @@ frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
 frontend/.vercel/
+frontend/.vitest/
 
 # Secrets
 .env
