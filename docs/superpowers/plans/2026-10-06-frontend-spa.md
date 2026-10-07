@@ -397,6 +397,18 @@ The main view, replacing the old dashboard's first tab.
 
 **Where this lives.** `spec.md` §5.3 places the total return inside `/posiciones`, so this is a panel on that route, not a route of its own. It is a separate *task* because it is a distinct deliverable with its own data source (`GET /portfolio/returns`), its own states and its own tests — the task structure need not mirror the route structure. Give it a full-width panel with its own loading, error and unavailable states rather than a cramped footer strip; the old dashboard buried it at the foot of a table, and burying it is what this plan is trying to stop.
 
+**The two currencies are different on purpose, and that is the hard part of this panel.**
+`GET /portfolio` reports `baseCurrency: USD` — the holdings are dollar-denominated, so the aggregate
+is in dollars. `GET /portfolio/returns` reports in **COP**, because the investor buys in pesos and the
+*return* is the peso question. So this panel sits directly below a USD summary band while showing peso
+figures, and a reader must not mistake one for the other. Label the currency on every figure in this
+panel; do not rely on the reader inferring it from context or from a thousands separator.
+
+The live figures as of this writing show why it matters: an asset gain of **+1,799,360 COP** against an
+exchange effect of **−1,310,802 COP**. The peso strengthening consumed roughly three quarters of the
+asset gain. Collapsed into one net number the reader would see a modest result and have no idea which
+force produced it, which is the entire reason the backend separates them.
+
 **This panel exists to make one distinction visible**: how much of the result came from assets moving and how much from the peso moving. It is the reason the backend separates them, and the whole point of the migration.
 
 **Contract:**
