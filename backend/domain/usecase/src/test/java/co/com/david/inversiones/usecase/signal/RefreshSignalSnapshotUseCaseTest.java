@@ -16,6 +16,11 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -55,7 +60,9 @@ class RefreshSignalSnapshotUseCaseTest {
         when(signalProvider.fetchSnapshots(Set.of(QQQ), TODAY)).thenReturn(List.of(fetched));
         when(snapshotRepository.saveAll(List.of(fetched))).thenReturn(List.of(fetched));
 
-        assertThat(useCase.execute()).isEqualTo(1);
+        RefreshOutcome outcome = useCase.execute();
+
+        assertThat(outcome).isEqualTo(new RefreshOutcome.Completed(1));
         verify(snapshotRepository).saveAll(List.of(fetched));
     }
 
@@ -65,7 +72,7 @@ class RefreshSignalSnapshotUseCaseTest {
         when(timeProvider.today()).thenReturn(TODAY);
         when(signalProvider.fetchSnapshots(Set.of(QQQ), TODAY)).thenReturn(List.of());
 
-        assertThat(useCase.execute()).isZero();
+        assertThat(useCase.execute()).isEqualTo(new RefreshOutcome.Completed(0));
         verify(snapshotRepository, never()).saveAll(anyList());
     }
 
@@ -73,7 +80,42 @@ class RefreshSignalSnapshotUseCaseTest {
     void doesNotCallTheProviderWhenNothingIsHeld() {
         when(transactionRepository.findAll()).thenReturn(List.of());
 
-        assertThat(useCase.execute()).isZero();
+        assertThat(useCase.execute()).isEqualTo(new RefreshOutcome.Completed(0));
         verifyNoInteractions(signalProvider, snapshotRepository);
+    }
+
+    /**
+     * Proves the guard actually excludes a second, genuinely concurrent call rather than merely
+     * asserting a call count (a proxy that would pass even without any guard, since both calls
+     * would still happen exactly once each). The first call is blocked inside the stubbed
+     * {@code SignalProvider} until the second call has already observed the guard held and
+     * returned {@link RefreshOutcome.AlreadyRunning}; only then is the first call released to
+     * finish normally.
+     */
+    @Test
+    void refusesASecondCallWhileTheFirstIsStillInFlight() throws Exception {
+        CountDownLatch firstCallEnteredProvider = new CountDownLatch(1);
+        CountDownLatch releaseFirstCall = new CountDownLatch(1);
+        when(transactionRepository.findAll()).thenReturn(List.of(holding(QQQ)));
+        when(timeProvider.today()).thenReturn(TODAY);
+        when(signalProvider.fetchSnapshots(Set.of(QQQ), TODAY)).thenAnswer(invocation -> {
+            firstCallEnteredProvider.countDown();
+            releaseFirstCall.await(5, TimeUnit.SECONDS);
+            return List.of();
+        });
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<RefreshOutcome> firstCall = pool.submit(useCase::execute);
+            assertThat(firstCallEnteredProvider.await(5, TimeUnit.SECONDS)).isTrue();
+
+            RefreshOutcome secondCallOutcome = useCase.execute();
+            assertThat(secondCallOutcome).isEqualTo(new RefreshOutcome.AlreadyRunning());
+
+            releaseFirstCall.countDown();
+            assertThat(firstCall.get(5, TimeUnit.SECONDS)).isEqualTo(new RefreshOutcome.Completed(0));
+        } finally {
+            pool.shutdown();
+        }
     }
 }

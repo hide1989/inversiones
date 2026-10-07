@@ -1,5 +1,6 @@
 package co.com.david.inversiones.config;
 
+import co.com.david.inversiones.usecase.signal.RefreshOutcome;
 import co.com.david.inversiones.usecase.signal.RefreshSignalSnapshotUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -69,19 +70,17 @@ class SignalSnapshotSchedulerConfigTest {
 
     /**
      * A failing run must not propagate — this job is the only writer of signal-snapshot history, so
-     * a scheduler that dies here would silently stop future runs from ever being attempted again —
-     * and it must release {@code running} so the very next call proceeds instead of hitting the
-     * "skip" branch, which is the behaviour a future refactor moving the reset out of the
-     * {@code finally} would break. Asserting {@code execute()} is invoked exactly twice (once per
-     * call) is what proves the guard was released between calls; a still-held guard would leave the
-     * second call skipped, and {@code execute()} would only ever have been invoked once.
+     * a scheduler that dies here would silently stop future runs from ever being attempted again.
+     * The overlap guard itself now lives in {@link RefreshSignalSnapshotUseCase} (not tested here,
+     * where the use case is a mock); this test only proves the scheduler's own exception handling
+     * does not let one failed call prevent the next one from being attempted.
      */
     @Test
-    void aFailedRunDoesNotPropagateAndReleasesTheGuardForTheNextRun() {
+    void aFailedRunDoesNotPropagateAndTheNextCallIsStillAttempted() {
         RefreshSignalSnapshotUseCase useCase = mock(RefreshSignalSnapshotUseCase.class);
         when(useCase.execute())
                 .thenThrow(new RuntimeException("n8n unreachable"))
-                .thenReturn(3);
+                .thenReturn(new RefreshOutcome.Completed(3));
         SignalSnapshotSchedulerConfig scheduler =
                 new SignalSnapshotSchedulerConfig(useCase, "0 15 10 * * MON-FRI", "America/Bogota");
 
@@ -89,5 +88,21 @@ class SignalSnapshotSchedulerConfigTest {
         assertThatCode(scheduler::refreshSignalSnapshots).doesNotThrowAnyException();
 
         verify(useCase, times(2)).execute();
+    }
+
+    /**
+     * Proves the scheduler maps {@link RefreshOutcome.AlreadyRunning} to a skip rather than
+     * crashing or misreporting it as a successful run.
+     */
+    @Test
+    void skipsWithoutThrowingWhenTheUseCaseReportsAlreadyRunning() {
+        RefreshSignalSnapshotUseCase useCase = mock(RefreshSignalSnapshotUseCase.class);
+        when(useCase.execute()).thenReturn(new RefreshOutcome.AlreadyRunning());
+        SignalSnapshotSchedulerConfig scheduler =
+                new SignalSnapshotSchedulerConfig(useCase, "0 15 10 * * MON-FRI", "America/Bogota");
+
+        assertThatCode(scheduler::refreshSignalSnapshots).doesNotThrowAnyException();
+
+        verify(useCase).execute();
     }
 }

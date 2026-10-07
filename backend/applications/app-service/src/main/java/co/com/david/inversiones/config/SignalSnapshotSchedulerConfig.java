@@ -1,5 +1,6 @@
 package co.com.david.inversiones.config;
 
+import co.com.david.inversiones.usecase.signal.RefreshOutcome;
 import co.com.david.inversiones.usecase.signal.RefreshSignalSnapshotUseCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,8 +8,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
-
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Schedules {@link RefreshSignalSnapshotUseCase} to run automatically once a day, on weekdays,
@@ -21,6 +20,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>{@link EnableScheduling} is declared explicitly, rather than relying on it being picked up
  * incidentally, so a reader can find the one place scheduling is switched on for this application.
+ *
+ * <p>The overlap guard that used to live here as its own {@code AtomicBoolean} moved into
+ * {@link RefreshSignalSnapshotUseCase} once a second caller (the manual-refresh endpoint) was
+ * added: a guard field on this class would only ever exclude this class's own calls from each
+ * other, not from the endpoint's, so two independent booleans could never give mutual exclusion
+ * between the two callers. The use case now reports back whether it ran via {@link RefreshOutcome}.
  */
 @Configuration
 @EnableScheduling
@@ -35,16 +40,6 @@ public class SignalSnapshotSchedulerConfig {
 
     /** The zone actually in effect, captured so a failure log can name it. */
     private final String refreshZone;
-
-    /**
-     * Tracks whether a run is currently in flight. A run can take tens of seconds — it fans out to
-     * n8n endpoints as slow as the {@code /sintesis-ia}-class calls — so without this guard an
-     * unusually slow run and the next trigger (or a manual re-trigger) could execute the use case
-     * twice concurrently against the same day's snapshot rows. {@link AtomicBoolean#compareAndSet}
-     * makes the check-and-mark atomic, so two overlapping triggers cannot both observe "not
-     * running" and both proceed.
-     */
-    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public SignalSnapshotSchedulerConfig(
             RefreshSignalSnapshotUseCase refreshSignalSnapshotUseCase,
@@ -70,23 +65,26 @@ public class SignalSnapshotSchedulerConfig {
      * stops advancing while the dashboard keeps rendering older and older data with nothing
      * indicating the refresh is broken. Swallowing it also means this run's failure does not prevent
      * the next scheduled run from being attempted.
+     *
+     * <p>If the use case reports {@link RefreshOutcome.AlreadyRunning} — because a previous run, or
+     * a manual trigger through the HTTP endpoint, currently holds the guard — this logs a warning
+     * and skips, exactly as before the guard moved into the use case.
      */
     @Scheduled(cron = "${inversiones.signal-snapshot.refresh-cron:0 15 10 * * MON-FRI}",
             zone = "${inversiones.signal-snapshot.refresh-zone:America/Bogota}")
     public void refreshSignalSnapshots() {
-        if (!running.compareAndSet(false, true)) {
-            log.warn("Skipping scheduled signal snapshot refresh: a previous run is still in progress");
-            return;
-        }
         try {
-            int stored = refreshSignalSnapshotUseCase.execute();
-            log.info("Scheduled signal snapshot refresh stored {} snapshot(s)", stored);
+            RefreshOutcome outcome = refreshSignalSnapshotUseCase.execute();
+            switch (outcome) {
+                case RefreshOutcome.Completed completed ->
+                        log.info("Scheduled signal snapshot refresh stored {} snapshot(s)", completed.storedCount());
+                case RefreshOutcome.AlreadyRunning ignored ->
+                        log.warn("Skipping scheduled signal snapshot refresh: a previous run is still in progress");
+            }
         } catch (Exception exception) {
             log.error("Scheduled signal snapshot refresh failed (cron={}, zone={}); "
                             + "historical snapshots will not advance until this succeeds",
                     refreshCron, refreshZone, exception);
-        } finally {
-            running.set(false);
         }
     }
 }

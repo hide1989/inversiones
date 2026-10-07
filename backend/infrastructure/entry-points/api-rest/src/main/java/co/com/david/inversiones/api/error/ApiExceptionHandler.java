@@ -2,6 +2,7 @@ package co.com.david.inversiones.api.error;
 
 import co.com.david.inversiones.model.exception.DomainException;
 import co.com.david.inversiones.model.exception.InvalidCredentialsException;
+import co.com.david.inversiones.model.exception.SignalRefreshInProgressException;
 import co.com.david.inversiones.model.exception.TransactionNotFoundException;
 import co.com.david.inversiones.model.exception.UnresolvedTickerException;
 import org.slf4j.Logger;
@@ -27,8 +28,9 @@ import java.util.UUID;
  *
  * <p>The mapping is deliberately narrow: a few specific domain exceptions get their own status
  * ({@link TransactionNotFoundException} and {@link UnresolvedTickerException} to 404,
- * {@link InvalidCredentialsException} to 401) because those are cases a client must be able to
- * branch on. Every other {@link DomainException} is a business-rule rejection of the request's
+ * {@link InvalidCredentialsException} to 401, {@link SignalRefreshInProgressException} to 409)
+ * because those are cases a client must be able to branch on. Every other {@link DomainException}
+ * is a business-rule rejection of the request's
  * content, which is a 400
  * regardless of which rule fired — adding a bespoke status per exception subtype would just make
  * the client's error handling brittle to a domain refactor. Anything not a {@link DomainException}
@@ -61,6 +63,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ProblemDetail handleInvalidCredentials(InvalidCredentialsException exception) {
         return problemDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
+    }
+
+    @ExceptionHandler(SignalRefreshInProgressException.class)
+    public ProblemDetail handleSignalRefreshInProgress(SignalRefreshInProgressException exception) {
+        return problemDetail(HttpStatus.CONFLICT, exception.getMessage());
     }
 
     @ExceptionHandler(DomainException.class)
