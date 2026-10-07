@@ -365,7 +365,7 @@ MSG
 
 ### Task 5: App shell and navigation
 
-**Contract:** the seven routes `spec.md` §5.3 defines — `/posiciones`, `/senales`, `/transacciones`, `/diversificacion`, `/sintesis-ia`, `/earnings`, `/watchlist` — plus `/login`, for eight in total. `/` redirects to `/posiciones`. There is deliberately **no** `/retornos` route: the spec places the total return inside `/posiciones`, and Task 7 builds it as a panel there. Semantic landmarks (`header`, `nav`, `main`). Navigation reachable and operable by keyboard, with the current route marked `aria-current="page"`. A single `ErrorBoundary` and the three shared states (loading skeleton, actionable error with retry, explicit empty) live here so every view uses the same ones. Lazy-load route components so the initial bundle stays small; report the built bundle size.
+**Contract:** the seven routes `spec.md` §5.3 defines — `/posiciones`, `/senales`, `/transacciones`, `/diversificacion`, `/sintesis-ia`, `/earnings`, `/watchlist` — plus `/login`, for eight in total. `/` redirects to `/posiciones`. There is deliberately **no** `/retornos` route: the spec places the total return inside `/posiciones`, and Task 7 builds it as a panel there. Semantic landmarks (`header`, `nav`, `main`). Navigation reachable and operable by keyboard, with the current route marked `aria-current="page"`. A single `ErrorBoundary` and the three shared states (loading skeleton, actionable error with retry, explicit empty) live here so every view uses the same ones. **This task owns the design tokens those states need** — Task 2's review correctly flagged that none exist yet. Define them here, driven by the real components rather than speculatively, and add them to `tokens.css` so no later view invents its own. Lazy-load route components so the initial bundle stays small; report the built bundle size.
 
 **Tests:** each route renders its view; an unknown route shows a not-found page; `aria-current` tracks the active route; keyboard tab order reaches every nav item; the error boundary renders a retry affordance rather than a blank screen.
 
@@ -384,6 +384,8 @@ The main view, replacing the old dashboard's first tab.
 - **A position with `priced: false` is visually distinct and labelled "sin valorar"**, with an explanation that it is either missing a price or missing an exchange rate — the API cannot say which, and the UI must not guess. `unpricedTickers` drives a summary note so the user knows the totals exclude a market value for them.
 - `baseCurrency` is displayed, not assumed. The totals are in it; the per-position native amounts are not.
 - Sortable by any numeric column, sort state in the URL so a view can be linked.
+
+**This task owns the data-table tokens** — header-row treatment, cell padding, row height, and the separator-or-zebra strategy. Task 2's review flagged that none exist. Define them here against this real table, put them in `tokens.css`, and build a shared table primitive. **Task 8's fifteen-column table must reuse them rather than inventing its own**, which is the ad-hoc divergence the review warned about. If the dense table later needs a tighter variant, it extends these tokens; it does not start over.
 
 **Tests:** renders the seeded portfolio from an MSW fixture captured from the real API; an unpriced position shows the label and the explanation and is excluded from no total the API included it in; the base currency is rendered; sorting by P&L reorders rows and updates the URL; a loading state shows skeletons; a 500 shows the error state with retry; an empty portfolio shows the empty state.
 
@@ -415,6 +417,7 @@ The main view, replacing the old dashboard's first tab.
 **Contract:**
 - The dense table: ticker, the six per-source scores, combined score with a `ScoreBar`, level, and the count of sources used. Fifteen columns readable at 1440px without horizontal scroll.
 - Sorted by combined score descending by default, matching the API's order and the old dashboard's behaviour.
+- **Reuses Task 6's table primitive and its tokens.** Fifteen columns may need a denser variant; extend the existing tokens rather than defining a parallel set.
 - **A ticker in `tickersWithoutData` is shown but visually separated and labelled "sin datos"**, and must not render a score of `0.00` or a level of `STRONG_SELL` as though they were an assessment. The API returns a zero-source score as `0.00`/`STRONG_SELL` by its threshold table, with `usedSources` empty as the marker — the UI reads `usedSources.length === 0`, not the value.
 - **A score built from three sources is a weaker claim than one built from six**, and the UI must show that: render the count of contributing sources beside every score. This is the whole reason `usedSources` is in the contract.
 - `averageScore` and `levelCounts` as summary tiles.
