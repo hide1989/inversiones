@@ -405,6 +405,7 @@ The main view, replacing the old dashboard's first tab.
 - Both rates displayed with their dates: the base TRM and the current one.
 - **When `currencyEffectAvailable` is `false`:** the effect, the asset gain in COP and the total are `null`. The view must state that the exchange rate is unavailable and therefore the currency effect cannot be computed — **not** render `0`, not render `—` without explanation, not hide the section. This is non-negotiable #2; a test asserts the literal absence of a `0` in that region.
 - A chart only if it clarifies: a two-bar comparison of asset gain versus currency effect is defensible; a pie chart of three segments is decoration.
+- **If you use Recharts, import it only inside a lazy route component, never from a shared module.** Task 5 measured the main chunk at 382 kB with Recharts not yet imported anywhere. Recharts is large; imported from a shared component it lands in the main chunk and every route pays for it, including the ones with no chart. Imported inside a lazily-loaded view it stays in that route's chunk, which is what the route splitting is for. Consider whether a two-bar comparison needs a charting library at all — two divs with widths from the API's percentages carry no dependency.
 
 **Tests:** the available case renders both components separately and both rates with dates; **the unavailable case renders an explanation and no zero** — assert on the rendered text, not on a prop; the three segments render with their labels in Spanish; a peso-only portfolio and a dollar-only portfolio both render correctly.
 
@@ -422,6 +423,7 @@ The main view, replacing the old dashboard's first tab.
 - **A score built from three sources is a weaker claim than one built from six**, and the UI must show that: render the count of contributing sources beside every score. This is the whole reason `usedSources` is in the contract.
 - `averageScore` and `levelCounts` as summary tiles.
 - A per-ticker history chart from `/signals/history`, loaded on demand rather than for every ticker on mount.
+- **The same Recharts rule as Task 7:** import it only inside this lazy route, never from a shared module, so it does not land in the main chunk that every other route loads.
 
 **Tests:** the table renders in score-descending order; a no-data ticker shows the label and does not display `0.00` as a score or a sell level — asserted on rendered text; the source count renders beside each score; sorting by a per-source column works; the history chart fetches only when a ticker is opened; the summary tiles render from the API values.
 
