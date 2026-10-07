@@ -39,3 +39,10 @@ export type SignalsDashboardResponse = z.infer<typeof SignalsDashboardResponseSc
 
 // Mirrors the array returned by GET /signals/history.
 export const SignalHistoryResponseSchema = z.array(SignalSnapshotSchema)
+
+// Mirrors SignalRefreshResponse, returned by POST /signals/refresh.
+export const SignalRefreshResponseSchema = z.object({
+  snapshotsStored: z.number(),
+})
+
+export type SignalRefreshResponse = z.infer<typeof SignalRefreshResponseSchema>

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -26,6 +26,17 @@ function mockHistory(body: ReadonlyArray<Record<string, unknown>>) {
       historyRequestCount += 1
       return HttpResponse.json(body)
     }),
+  )
+}
+
+function mockRefresh(handler: () => Response | Promise<Response>) {
+  server.use(http.post(`${API_BASE}/signals/refresh`, handler))
+}
+
+function problemResponse(status: number, title: string, detail: string) {
+  return HttpResponse.json(
+    { type: 'about:blank', title, status, detail, instance: '/api/v1/signals/refresh' },
+    { status, headers: { 'Content-Type': 'application/problem+json' } },
   )
 }
 
@@ -190,6 +201,95 @@ describe('the derived scored variant', () => {
 
     await screen.findByTestId('signal-history-chart')
     expect(historyRequestCount).toBe(1)
+  })
+})
+
+describe('manual refresh', () => {
+  it('fires the mutation and the table repopulates from the invalidated query', async () => {
+    mockSignals(validSignalsNoDataResponse)
+    mockHistory([])
+    renderView()
+    await screen.findAllByTestId(/^signal-row-/)
+
+    // The refresh succeeds and the dashboard query is invalidated: the next
+    // GET /signals the invalidation triggers now returns the scored fixture,
+    // proving the table repopulates from that refetch rather than from any
+    // data the mutation response itself carried.
+    mockSignals(validSignalsScoredResponse)
+    mockRefresh(() => HttpResponse.json({ snapshotsStored: 2 }))
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /actualizar señales/i }))
+
+    // "6/6" only appears for the scored fixture's fully-sourced row — the
+    // no-data fixture (rendered before the click) has no ticker with any
+    // sources at all, so this only passes if the table actually refetched
+    // rather than still showing its pre-click rows (both fixtures happen to
+    // share the ticker "QQQ", so asserting on that alone would not prove it).
+    await screen.findByText('6/6')
+    expect(screen.getByText(/se guardaron 2 señales/i)).toBeInTheDocument()
+  })
+
+  it('disables the control while the refresh is in flight', async () => {
+    mockSignals(validSignalsNoDataResponse)
+    mockHistory([])
+    renderView()
+    await screen.findAllByTestId(/^signal-row-/)
+
+    // A plain `let` reassigned only inside the nested Promise executor would
+    // get over-narrowed to `null` by TypeScript's control-flow analysis at
+    // the call site below; a mutable object field avoids that.
+    const pending: { resolve: (() => void) | null } = { resolve: null }
+    mockRefresh(
+      () =>
+        new Promise<Response>((resolve) => {
+          pending.resolve = () => resolve(HttpResponse.json({ snapshotsStored: 0 }))
+        }),
+    )
+
+    const user = userEvent.setup()
+    const button = screen.getByRole('button', { name: /actualizar señales/i })
+    await user.click(button)
+
+    expect(button).toBeDisabled()
+
+    pending.resolve?.()
+    await waitFor(() => expect(button).not.toBeDisabled())
+  })
+
+  it('renders the server message when the refresh fails', async () => {
+    mockSignals(validSignalsNoDataResponse)
+    mockHistory([])
+    renderView()
+    await screen.findAllByTestId(/^signal-row-/)
+
+    mockRefresh(() => problemResponse(502, 'Bad Gateway', 'n8n no respondió a tiempo'))
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /actualizar señales/i }))
+
+    expect(await screen.findByText('n8n no respondió a tiempo')).toBeInTheDocument()
+  })
+
+  /**
+   * The guard's refusal must reach the user as "a refresh is already
+   * running", not as a generic failure — a 409 proves nothing broke, it
+   * just means the scheduled job (or another click) got there first.
+   */
+  it('renders the server message for a 409 when a refresh is already running', async () => {
+    mockSignals(validSignalsNoDataResponse)
+    mockHistory([])
+    renderView()
+    await screen.findAllByTestId(/^signal-row-/)
+
+    mockRefresh(() =>
+      problemResponse(409, 'Conflict', 'A signal refresh is already running; try again once it finishes'),
+    )
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /actualizar señales/i }))
+
+    expect(await screen.findByText(/a signal refresh is already running/i)).toBeInTheDocument()
   })
 })
 

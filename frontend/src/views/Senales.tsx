@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useSignalHistory, useSignalsDashboard } from '../api/queries/signals'
+import { useRefreshSignals, useSignalHistory, useSignalsDashboard } from '../api/queries/signals'
 import { formatScore } from '../api/money'
 import { compareDecimalStrings } from '../api/decimalCompare'
-import { ScoreBar, Surface, Tag } from '../design/primitives'
+import { ApiError } from '../api/problem'
+import { Button, ScoreBar, Surface, Tag } from '../design/primitives'
 import { DataTable, type DataTableColumn, type DataTableSort } from '../components/table'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
 import type { SignalSnapshot, TickerSignal } from '../api/schemas/signals'
@@ -132,6 +133,41 @@ function buildColumns(onOpenHistory: (ticker: string) => void): DataTableColumn<
       render: (signal) => <SourceCountCell signal={signal} />,
     },
   ]
+}
+
+/** Mirrors `Transacciones.tsx`'s `problemDetailOf`: renders the server's own message, never a generic fallback. */
+function problemDetailOf(error: unknown): string | null {
+  return error instanceof ApiError ? error.problem.detail : null
+}
+
+/**
+ * Lets the user retry the 10:15 Bogota scheduled refresh on demand —
+ * after a backend restart or an n8n outage the table would otherwise
+ * stay stale until the next weekday morning. Disabled while in flight so
+ * a second click cannot race the first against the backend's own guard,
+ * and announces its outcome through a live region rather than leaving a
+ * screen-reader user to notice the table change on their own.
+ */
+function RefreshControl() {
+  const refresh = useRefreshSignals()
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+        {refresh.isPending ? 'Actualizando…' : 'Actualizar señales'}
+      </Button>
+      {refresh.isSuccess && (
+        <p role="status" className="font-sans text-xs text-fg-muted">
+          Se guardaron {refresh.data.snapshotsStored} señales nuevas.
+        </p>
+      )}
+      {refresh.isError && (
+        <p role="alert" className="font-sans text-xs text-negative">
+          {problemDetailOf(refresh.error) ?? 'No se pudo actualizar las señales.'}
+        </p>
+      )}
+    </div>
+  )
 }
 
 function sortSignals(signals: ReadonlyArray<TickerSignal>, sort: DataTableSort | null): TickerSignal[] {
@@ -305,7 +341,10 @@ export function Senales() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-mono text-xl font-semibold text-fg">Señales</h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="font-mono text-xl font-semibold text-fg">Señales</h1>
+        <RefreshControl />
+      </div>
       <Surface level={1} className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
         <AverageScoreTile averageScore={data.averageScore} hasAnyScoredTicker={hasAnyScoredTicker} />
         <LevelCountsTile levelCounts={data.levelCounts} />
