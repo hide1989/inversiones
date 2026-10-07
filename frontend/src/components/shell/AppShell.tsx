@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react'
-import { Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense, useEffect, useRef } from 'react'
+import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { Button } from '../../design/primitives'
 import { LoadingState } from '../state'
@@ -49,12 +49,49 @@ function navLinkClassName({ isActive }: { isActive: boolean }): string {
  * `nav`, `main`), the eight-view route tree (plus the design system's own
  * Specimen route, reachable but not part of navigation), and the logout
  * control `AuthProvider.logout` otherwise has no caller for.
+ *
+ * Focus management: a route change replaces all of `main`'s content, but
+ * by default the browser leaves focus sitting on whatever nav link was
+ * just activated — invisible to a sighted mouse user, but to a screen
+ * reader it means the page silently became a different page, with
+ * nothing announced and no cue where the new content starts. On every
+ * pathname change (nav click, back/forward, or a programmatic navigate —
+ * all three go through `useLocation`, not a click handler) focus moves to
+ * `main` itself, which is a real landmark containing the new view's own
+ * heading, so a screen reader lands on "main" immediately followed by
+ * that heading. A ref-tracked "have we rendered once" flag skips the very
+ * first run, so initial page load does not steal focus from wherever the
+ * browser already put it or cause an unexpected scroll. No extra
+ * `aria-live` region: moving focus into a landmark that itself contains
+ * the new heading already produces an announcement, and a live region on
+ * top of that would just repeat it.
  */
 export function AppShell() {
   const { logout } = useAuth()
+  const location = useLocation()
+  const mainRef = useRef<HTMLElement>(null)
+  const hasRenderedOnce = useRef(false)
+
+  useEffect(() => {
+    if (!hasRenderedOnce.current) {
+      hasRenderedOnce.current = true
+      return
+    }
+    mainRef.current?.focus()
+  }, [location.pathname])
 
   return (
     <div className="app-shell flex min-h-screen flex-col bg-ground">
+      <a
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault()
+          mainRef.current?.focus()
+        }}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:bg-accent focus:px-3 focus:py-1.5 focus:font-mono focus:text-sm focus:font-medium focus:text-accent-fg focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-ground"
+      >
+        Saltar al contenido
+      </a>
       <header className="flex items-center justify-between border-b border-border px-6 py-3">
         <span className="font-mono text-sm font-semibold uppercase tracking-wide text-fg">Inversiones</span>
         <Button variant="ghost" onClick={() => logout()}>
@@ -73,7 +110,12 @@ export function AppShell() {
             ))}
           </ul>
         </nav>
-        <main className="flex-1 p-6">
+        <main
+          id="main-content"
+          ref={mainRef}
+          tabIndex={-1}
+          className="flex-1 p-6 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-ground"
+        >
           <ErrorBoundary>
             <Suspense fallback={<LoadingState />}>
               <Routes>

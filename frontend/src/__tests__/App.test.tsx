@@ -73,20 +73,55 @@ describe('the authenticated route tree', () => {
     const nav = screen.getByRole('navigation')
     const navLinks = within(nav).getAllByRole('link')
     const logoutButton = screen.getByRole('button', { name: /cerrar sesión/i })
+    const skipLink = screen.getByRole('link', { name: /saltar al contenido/i })
 
     const reached: Element[] = []
     document.body.focus()
-    for (let i = 0; i < navLinks.length + 1; i++) {
+    // +1 for the skip link, which now precedes the nav as the first focusable element.
+    for (let i = 0; i < navLinks.length + 2; i++) {
       await user.tab()
       if (document.activeElement) {
         reached.push(document.activeElement)
       }
     }
 
+    expect(reached).toContain(skipLink)
     for (const link of navLinks) {
       expect(reached).toContain(link)
     }
     expect(reached).toContain(logoutButton)
+  })
+
+  it('does not steal focus on the initial render', async () => {
+    renderAt('/posiciones')
+    await screen.findByRole('heading', { name: /posiciones/i })
+    expect(document.activeElement).not.toBe(screen.getByRole('main'))
+  })
+
+  it('moves focus to main on navigation, so a screen reader notices the view changed', async () => {
+    const user = userEvent.setup()
+    renderAt('/posiciones')
+    await screen.findByRole('heading', { name: /posiciones/i })
+
+    const nav = screen.getByRole('navigation')
+    await user.click(within(nav).getByRole('link', { name: /señales/i }))
+
+    await screen.findByRole('heading', { name: /señales/i })
+    expect(document.activeElement).toBe(screen.getByRole('main'))
+  })
+
+  it('has a skip link that is the first tab stop and moves focus to main when activated', async () => {
+    const user = userEvent.setup()
+    renderAt('/posiciones')
+    await screen.findByRole('heading', { name: /posiciones/i })
+
+    document.body.focus()
+    await user.tab()
+    const skipLink = screen.getByRole('link', { name: /saltar al contenido/i })
+    expect(document.activeElement).toBe(skipLink)
+
+    await user.click(skipLink)
+    expect(document.activeElement).toBe(screen.getByRole('main'))
   })
 
   it('logs out, clearing the session and landing on /login', async () => {
