@@ -23,6 +23,7 @@ frontend/.vercel/
 .env
 .env.*
 !.env.template
+!.env.example
 deploy/.env
 jenkins/casc/secrets/
 
