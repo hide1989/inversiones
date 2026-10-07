@@ -18,14 +18,34 @@ describe('formatMoney', () => {
     expect(result).not.toMatch(/e\+?\d/i)
   })
 
-  it('never rounds the fraction, only truncates or pads it', () => {
-    // 0.005 rounds to 0.01 under float rounding; truncation keeps it 0.00.
-    expect(formatMoney({ amount: '10.005', currency: 'USD' }, { decimals: 2 })).toBe('USD 10.00')
-    // Padding a short fraction does not invent precision.
+  it('pads a fraction shorter than the requested width rather than rounding', () => {
     expect(formatMoney({ amount: '10.5', currency: 'USD' }, { decimals: 4 })).toBe('USD 10.5000')
   })
 
-  it('preserves the sign on a negative amount', () => {
+  it('rounds half away from zero on a simple case', () => {
+    expect(formatMoney({ amount: '10.005', currency: 'USD' }, { decimals: 2 })).toBe('USD 10.01')
+  })
+
+  it('rounds a negative amount away from zero (toward a larger-magnitude loss), not toward zero', () => {
+    // Truncating toward zero would understate the loss as -12.40; the
+    // faithful rounded figure is -12.41.
+    expect(formatMoney({ amount: '-12.406', currency: 'USD' }, { decimals: 2 })).toBe('USD -12.41')
+  })
+
+  it('propagates a carry through several trailing nines', () => {
+    expect(formatMoney({ amount: '1.9995', currency: 'USD' }, { decimals: 3 })).toBe('USD 2.000')
+  })
+
+  it('propagates a carry that grows the integer part', () => {
+    expect(formatMoney({ amount: '9.99', currency: 'USD' }, { decimals: 1 })).toBe('USD 10.0')
+  })
+
+  it('rounds an exact half away from zero for both a positive and a negative amount', () => {
+    expect(formatMoney({ amount: '2.5', currency: 'USD' }, { decimals: 0 })).toBe('USD 3')
+    expect(formatMoney({ amount: '-2.5', currency: 'USD' }, { decimals: 0 })).toBe('USD -3')
+  })
+
+  it('preserves the sign on a negative amount with no rounding needed', () => {
     expect(formatMoney({ amount: '-328.4200000000', currency: 'USD' })).toBe('USD -328.42')
   })
 
