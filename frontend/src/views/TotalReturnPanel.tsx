@@ -32,6 +32,7 @@ function SegmentRow({ segment }: { segment: ReturnSegment }) {
         <Delta
           value={formatMoney({ amount: stripSign(segment.assetGain.amount), currency: segment.assetGain.currency }, { withCurrency: false })}
           sign={signOf(segment.assetGain.amount)}
+          currency={segment.assetGain.currency}
         />
       </td>
     </tr>
@@ -179,7 +180,7 @@ export function TotalReturnPanel() {
     <Surface level={1} data-testid="total-return-panel" className="flex w-full flex-col gap-6 p-4">
       <div>
         <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-fg-muted">
-          Retorno total (COP)
+          Retorno en pesos
         </h2>
         <p className="font-sans text-xs text-fg-subtle">
           El portafolio se mide en dólares arriba; esta sección responde la pregunta en pesos — cuánto vino de los

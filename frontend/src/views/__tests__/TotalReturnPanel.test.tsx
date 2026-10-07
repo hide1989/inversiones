@@ -91,6 +91,23 @@ describe('the available case, from the real captured fixture', () => {
     const bvcRow = screen.getByTestId('segment-row-BVC_COLOMBIA')
     expect(within(bvcRow).getByText(/222,227\.59/)).toBeInTheDocument()
   })
+
+  it('labels every segment gain with its own currency, since the column mixes USD and COP', async () => {
+    mockReturns(validTotalReturnResponse)
+    renderPanel()
+
+    await screen.findByText(/1,799,360\.10/)
+
+    // USD_ASSETS gains +238.46 USD; BVC_COLOMBIA gains +222,227.59 COP.
+    // Without a currency on the cell, 222,227 reads as the bigger number
+    // when it is in fact the smaller contributor (~57 USD) — exactly the
+    // confusion this panel exists to prevent, one level below the panel.
+    const usdRow = screen.getByTestId('segment-row-USD_ASSETS')
+    expect(within(usdRow).getByText(/USD\s*\+?238\.46/)).toBeInTheDocument()
+
+    const bvcRow = screen.getByTestId('segment-row-BVC_COLOMBIA')
+    expect(within(bvcRow).getByText(/COP\s*\+?222,227\.59/)).toBeInTheDocument()
+  })
 })
 
 describe('the unavailable case: non-negotiable #2', () => {
