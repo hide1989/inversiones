@@ -124,3 +124,132 @@ export const totalReturnDollarOnly = {
     },
   ],
 }
+
+// Captured verbatim from the running backend's GET /signals (see
+// .superpowers/sdd/2026-10-06-frontend-spa/task-8-report.md): the
+// scheduled refresh had not run yet, so every one of the twenty seeded
+// tickers has an empty snapshot dated the epoch and zero `usedSources`.
+// The backend still returns `score.value: "0.00"` / `score.level:
+// "STRONG_SELL"` for each — its threshold table applied to a zero-source
+// score — which is exactly the trap this fixture exists to exercise: the
+// UI must read `usedSources.length === 0`, never the value, to tell "no
+// assessment" apart from "a strong sell".
+const NO_DATA_TICKERS = [
+  'QQQ', 'VOO', 'SMH', 'GLD', 'TSLA', 'GOOGL', 'TTWO', 'IBIT', 'NU', 'TSM',
+  'AMZN', 'MSFT', 'NLR', 'SPCX', 'PLTR', 'UNH', 'JPM', 'EC', 'TERPEL', 'MINEROS',
+]
+
+function noDataSignal(ticker: string) {
+  return {
+    ticker,
+    snapshot: { ticker, snapshotDate: '1970-01-01', scores: {} },
+    score: { value: '0.00', level: 'STRONG_SELL', usedSources: [] },
+  }
+}
+
+export const validSignalsNoDataResponse = {
+  signals: NO_DATA_TICKERS.map(noDataSignal),
+  averageScore: '0.00',
+  levelCounts: {},
+  tickersWithoutData: [...NO_DATA_TICKERS],
+}
+
+// `GET /signals/history` for the real no-data capture: no snapshot has
+// ever been persisted for this ticker yet, so the backend returns an
+// empty array rather than synthesising history.
+export const emptySignalHistoryResponse: unknown[] = []
+
+// A derived scored variant — there is no real fixture with actual scores
+// yet (the capture above is the live state), so this is hand-built to
+// exercise the normal path. Values invented, and why each is plausible:
+// - Five tickers (QQQ, MSFT, AMZN, TSLA, GOOGL) get a combined score and a
+//   subset of the six sources (3 to 6 of them), mirroring the real
+//   contract's six source keys (TECHNICAL, NEWS, ANALYST, INSIDER,
+//   SOCIAL, WSB) and the fact that not every source covers every ticker.
+// - Per-source values sit inside the 0-10 scale `ScoreBar` already
+//   assumes (see its own test), roughly clustered around each ticker's
+//   combined score the way a weighted average would look, without this
+//   fixture performing that arithmetic itself (fixtures are authored
+//   data, not browser computation).
+// - Levels (STRONG_BUY, BUY, HOLD, SELL) follow a plausible threshold
+//   table descending with score, consistent with the one real level this
+//   plan observed (STRONG_SELL at 0.00).
+// - GLD is kept as a sixth, still-no-data ticker in the same response, so
+//   the scored fixture also exercises a dashboard that mixes real
+//   assessments with a no-data row — the case the real capture alone
+//   cannot show.
+// - `averageScore` and `levelCounts` are given as the backend would
+//   compute them: averaged and counted over the five scored tickers
+//   only, excluding GLD — matching the documented rule that no-data
+//   tickers are excluded from both.
+// - The array is already in combined-score-descending order, matching
+//   the API's own documented ordering.
+export const validSignalsScoredResponse = {
+  signals: [
+    {
+      ticker: 'QQQ',
+      snapshot: {
+        ticker: 'QQQ',
+        snapshotDate: '2026-10-06',
+        scores: {
+          TECHNICAL: '8.1', NEWS: '7.9', ANALYST: '9.0',
+          INSIDER: '8.5', SOCIAL: '7.8', WSB: '8.8',
+        },
+      },
+      score: { value: '8.40', level: 'STRONG_BUY', usedSources: ['TECHNICAL', 'NEWS', 'ANALYST', 'INSIDER', 'SOCIAL', 'WSB'] },
+    },
+    {
+      ticker: 'MSFT',
+      snapshot: {
+        ticker: 'MSFT',
+        snapshotDate: '2026-10-06',
+        scores: { TECHNICAL: '7.5', NEWS: '6.8', ANALYST: '7.9', SOCIAL: '6.5', WSB: '7.3' },
+      },
+      score: { value: '7.20', level: 'BUY', usedSources: ['TECHNICAL', 'NEWS', 'ANALYST', 'SOCIAL', 'WSB'] },
+    },
+    {
+      ticker: 'AMZN',
+      snapshot: {
+        ticker: 'AMZN',
+        snapshotDate: '2026-10-06',
+        scores: { TECHNICAL: '6.0', NEWS: '5.8', ANALYST: '6.9', WSB: '5.6' },
+      },
+      score: { value: '6.10', level: 'BUY', usedSources: ['TECHNICAL', 'NEWS', 'ANALYST', 'WSB'] },
+    },
+    {
+      ticker: 'TSLA',
+      snapshot: {
+        ticker: 'TSLA',
+        snapshotDate: '2026-10-06',
+        scores: { TECHNICAL: '5.2', NEWS: '3.9', WSB: '5.1' },
+      },
+      score: { value: '4.80', level: 'HOLD', usedSources: ['TECHNICAL', 'NEWS', 'WSB'] },
+    },
+    {
+      ticker: 'GOOGL',
+      snapshot: {
+        ticker: 'GOOGL',
+        snapshotDate: '2026-10-06',
+        scores: { TECHNICAL: '3.5', ANALYST: '2.8', INSIDER: '3.0' },
+      },
+      score: { value: '3.10', level: 'SELL', usedSources: ['TECHNICAL', 'ANALYST', 'INSIDER'] },
+    },
+    noDataSignal('GLD'),
+  ],
+  averageScore: '5.92',
+  levelCounts: { STRONG_BUY: 1, BUY: 2, HOLD: 1, SELL: 1 },
+  tickersWithoutData: ['GLD'],
+}
+
+// A derived daily history for QQQ — the real `/signals/history` capture
+// for this exact ticker/range was an empty array (no snapshot persisted
+// yet), so this invents five consecutive trading days trending toward
+// the scored fixture's QQQ combined score of 8.40, to exercise the
+// on-demand sparkline with a shape a real history would plausibly have.
+export const validSignalHistoryResponse = [
+  { ticker: 'QQQ', snapshotDate: '2026-10-02', scores: { TECHNICAL: '7.0', NEWS: '7.1', ANALYST: '7.5', INSIDER: '7.8', SOCIAL: '7.0', WSB: '7.6' } },
+  { ticker: 'QQQ', snapshotDate: '2026-10-03', scores: { TECHNICAL: '7.4', NEWS: '7.3', ANALYST: '7.8', INSIDER: '8.0', SOCIAL: '7.2', WSB: '7.9' } },
+  { ticker: 'QQQ', snapshotDate: '2026-10-04', scores: { TECHNICAL: '7.6', NEWS: '7.5', ANALYST: '8.2', INSIDER: '8.1', SOCIAL: '7.5', WSB: '8.2' } },
+  { ticker: 'QQQ', snapshotDate: '2026-10-05', scores: { TECHNICAL: '7.9', NEWS: '7.7', ANALYST: '8.6', INSIDER: '8.3', SOCIAL: '7.7', WSB: '8.5' } },
+  { ticker: 'QQQ', snapshotDate: '2026-10-06', scores: { TECHNICAL: '8.1', NEWS: '7.9', ANALYST: '9.0', INSIDER: '8.5', SOCIAL: '7.8', WSB: '8.8' } },
+]

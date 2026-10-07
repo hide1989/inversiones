@@ -13,6 +13,16 @@ export interface DataTableColumn<T> {
   /** Numbers right-align, tickers left-align, nothing centres — per the design direction. Defaults to right. */
   align?: 'left' | 'right'
   sortable?: boolean
+  /**
+   * A CSS width hint for this column (e.g. `'4.5rem'`), rendered as a
+   * `<col>` in a `<colgroup>`. Task 6's eight-column table never sets
+   * this and keeps its default auto sizing unchanged. Task 8's
+   * fifteen-column signals table sets it on every column so six
+   * near-identical per-source score columns, the ticker, and the
+   * combined score/level/source-count columns each get the width their
+   * content actually needs instead of fighting equal-width auto layout.
+   */
+  width?: string
   render: (row: T) => ReactNode
 }
 
@@ -70,11 +80,19 @@ export function DataTable<T>({
   getRowTestId,
 }: DataTableProps<T>) {
   const cellY = density === 'dense' ? 'py-row-y-dense' : 'py-row-y'
+  const hasWidthHints = columns.some((column) => column.width !== undefined)
 
   return (
     <div className="overflow-x-auto rounded-md">
-      <table className="w-full border-collapse font-mono text-sm">
+      <table className={`w-full border-collapse font-mono text-sm ${hasWidthHints ? 'table-fixed' : ''}`.trim()}>
         <caption className="sr-only">{caption}</caption>
+        {hasWidthHints && (
+          <colgroup>
+            {columns.map((column) => (
+              <col key={column.key} style={{ width: column.width ?? 'auto' }} />
+            ))}
+          </colgroup>
+        )}
         <thead>
           <tr className="bg-table-header">
             {columns.map((column) => {
