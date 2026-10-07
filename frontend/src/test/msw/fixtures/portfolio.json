@@ -1,0 +1,954 @@
+{
+    "positions": [
+        {
+            "ticker": "QQQ",
+            "brokerName": "Hapi",
+            "quantity": "0.4863720000",
+            "totalCost": {
+                "amount": "300.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "616.8118230490",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "369.4773535200",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "69.4773535200",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "23.1591",
+            "dayChangePercent": "0.4576",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "300.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "369.4773535200",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "VOO",
+            "brokerName": "Hapi",
+            "quantity": "0.2401450000",
+            "totalCost": {
+                "amount": "150.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "624.6226238314",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "171.9918490000",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "21.9918490000",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "14.6612",
+            "dayChangePercent": "0.5447",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "150.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "171.9918490000",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "SMH",
+            "brokerName": "Hapi",
+            "quantity": "0.5365350000",
+            "totalCost": {
+                "amount": "264.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "492.0461852442",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "339.3583875000",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "75.3583875000",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "28.5448",
+            "dayChangePercent": "-0.2209",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "264.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "339.3583875000",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "GLD",
+            "brokerName": "Hapi",
+            "quantity": "0.2397390000",
+            "totalCost": {
+                "amount": "100.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "417.1202849766",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "91.6450275300",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-8.3549724700",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-8.3550",
+            "dayChangePercent": "0.7166",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "100.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "91.6450275300",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "TSLA",
+            "brokerName": "Hapi",
+            "quantity": "0.1130970000",
+            "totalCost": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "442.0983757306",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "43.0537659600",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-6.9462340400",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-13.8925",
+            "dayChangePercent": "0.5149",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "43.0537659600",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "GOOGL",
+            "brokerName": "Hapi",
+            "quantity": "0.3785290000",
+            "totalCost": {
+                "amount": "130.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "343.4347170230",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "131.6069627200",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "1.6069627200",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "1.2361",
+            "dayChangePercent": "0.3492",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "130.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "131.6069627200",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "TTWO",
+            "brokerName": "Hapi",
+            "quantity": "1.0313110000",
+            "totalCost": {
+                "amount": "250.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "242.4099035112",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "208.8714168300",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-41.1285831700",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-16.4514",
+            "dayChangePercent": "-0.4571",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "250.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "208.8714168300",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "IBIT",
+            "brokerName": "Hapi",
+            "quantity": "2.7027030000",
+            "totalCost": {
+                "amount": "100.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "36.9999959300",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "131.0540684700",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "31.0540684700",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "31.0541",
+            "dayChangePercent": "-0.1442",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "100.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "131.0540684700",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "NU",
+            "brokerName": "Hapi",
+            "quantity": "4.5194250000",
+            "totalCost": {
+                "amount": "69.9999999998",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "15.4886960177",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "70.7741955000",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "0.7741955002",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "1.1060",
+            "dayChangePercent": "3.1621",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "69.9999999998",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "70.7741955000",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "TSM",
+            "brokerName": "ARQ",
+            "quantity": "0.5872692130",
+            "totalCost": {
+                "amount": "228.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "388.2376173532",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "283.2399414299",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "55.2399414299",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "24.2280",
+            "dayChangePercent": "-0.7205",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "228.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "283.2399414299",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "AMZN",
+            "brokerName": "ARQ",
+            "quantity": "1.6776129410",
+            "totalCost": {
+                "amount": "421.2900000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "251.1246722673",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "429.9554206489",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "8.6654206489",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "2.0569",
+            "dayChangePercent": "1.9451",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "421.2900000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "429.9554206489",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "MSFT",
+            "brokerName": "ARQ",
+            "quantity": "0.2945780000",
+            "totalCost": {
+                "amount": "130.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "441.3092627420",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "155.9201354000",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "25.9201354000",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "19.9386",
+            "dayChangePercent": "0.7845",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "130.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "155.9201354000",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "NLR",
+            "brokerName": "ARQ",
+            "quantity": "0.4311311150",
+            "totalCost": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "115.9740001600",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "47.1786779145",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-2.8213220855",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-5.6426",
+            "dayChangePercent": "5.4950",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "47.1786779145",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "SPCX",
+            "brokerName": "ARQ",
+            "quantity": "0.9716065640",
+            "totalCost": {
+                "amount": "180.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "185.2601728615",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "167.0386004829",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-12.9613995171",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-7.2008",
+            "dayChangePercent": "0.4851",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "180.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "167.0386004829",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "QQQ",
+            "brokerName": "ARQ",
+            "quantity": "0.1372062070",
+            "totalCost": {
+                "amount": "100.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "728.8300011092",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "104.2300672096",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "4.2300672096",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "4.2301",
+            "dayChangePercent": "0.4576",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "100.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "104.2300672096",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "VOO",
+            "brokerName": "ARQ",
+            "quantity": "0.0730353490",
+            "totalCost": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "684.6000010214",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "52.3079169538",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "2.3079169538",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "4.6158",
+            "dayChangePercent": "0.5447",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "52.3079169538",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "TSLA",
+            "brokerName": "ARQ",
+            "quantity": "0.1184609550",
+            "totalCost": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "422.0800009590",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "45.0957163494",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-4.9042836506",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-9.8086",
+            "dayChangePercent": "0.5149",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "45.0957163494",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "GOOGL",
+            "brokerName": "ARQ",
+            "quantity": "0.2512001780",
+            "totalCost": {
+                "amount": "90.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "358.2800009003",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "87.3372778870",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-2.6627221130",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-2.9586",
+            "dayChangePercent": "0.3492",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "90.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "87.3372778870",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "NU",
+            "brokerName": "ARQ",
+            "quantity": "6.0150375930",
+            "totalCost": {
+                "amount": "80.0000000001",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "13.3000000022",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "94.1954887064",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "14.1954887063",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "17.7444",
+            "dayChangePercent": "3.1621",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "80.0000000001",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "94.1954887064",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "PLTR",
+            "brokerName": "ARQ",
+            "quantity": "0.1665001660",
+            "totalCost": {
+                "amount": "20.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "120.1200003608",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "31.9796868836",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "11.9796868836",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "59.8984",
+            "dayChangePercent": "1.4097",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "20.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "31.9796868836",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "UNH",
+            "brokerName": "ARQ",
+            "quantity": "0.1195228640",
+            "totalCost": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "418.3300025341",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "44.9788441805",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-5.0211558195",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-10.0423",
+            "dayChangePercent": "-0.5970",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "44.9788441805",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "JPM",
+            "brokerName": "ARQ",
+            "quantity": "0.1523136440",
+            "totalCost": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "328.2700005523",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "50.4584639843",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "0.4584639843",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "0.9169",
+            "dayChangePercent": "-0.3309",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "50.0000000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "50.4584639843",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "EC",
+            "brokerName": "Trii",
+            "quantity": "50.0000000000",
+            "totalCost": {
+                "amount": "590.6600000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "11.8132000000",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "848.0000000000",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "257.3400000000",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "43.5682",
+            "dayChangePercent": "-1.6812",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "590.6600000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "848.0000000000",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "NU",
+            "brokerName": "Trii",
+            "quantity": "3.0000000000",
+            "totalCost": {
+                "amount": "49.8600000000",
+                "currency": "USD"
+            },
+            "averageCost": {
+                "amount": "16.6200000000",
+                "currency": "USD"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "USD"
+            },
+            "marketValue": {
+                "amount": "46.9800000000",
+                "currency": "USD"
+            },
+            "unrealizedPnl": {
+                "amount": "-2.8800000000",
+                "currency": "USD"
+            },
+            "unrealizedPnlPercent": "-5.7762",
+            "dayChangePercent": "3.1621",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "49.8600000000",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "46.9800000000",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "TERPEL",
+            "brokerName": "Trii",
+            "quantity": "25.0000000000",
+            "totalCost": {
+                "amount": "416232.8100000000",
+                "currency": "COP"
+            },
+            "averageCost": {
+                "amount": "16649.3124000000",
+                "currency": "COP"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "COP"
+            },
+            "marketValue": {
+                "amount": "482500.0000000000",
+                "currency": "COP"
+            },
+            "unrealizedPnl": {
+                "amount": "66267.1900000000",
+                "currency": "COP"
+            },
+            "unrealizedPnlPercent": "15.9207",
+            "dayChangePercent": "3.6500",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "130.0900013111",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "150.8012442186",
+                "currency": "USD"
+            }
+        },
+        {
+            "ticker": "MINEROS",
+            "brokerName": "Trii",
+            "quantity": "25.0000000000",
+            "totalCost": {
+                "amount": "424039.6000000000",
+                "currency": "COP"
+            },
+            "averageCost": {
+                "amount": "16961.5840000000",
+                "currency": "COP"
+            },
+            "realizedPnl": {
+                "amount": "0.0000000000",
+                "currency": "COP"
+            },
+            "marketValue": {
+                "amount": "580000.0000000000",
+                "currency": "COP"
+            },
+            "unrealizedPnl": {
+                "amount": "155960.4000000000",
+                "currency": "COP"
+            },
+            "unrealizedPnlPercent": "36.7797",
+            "dayChangePercent": "2.7500",
+            "priced": true,
+            "costInBaseCurrency": {
+                "amount": "132.5299466901",
+                "currency": "USD"
+            },
+            "marketValueInBaseCurrency": {
+                "amount": "181.2740345011",
+                "currency": "USD"
+            }
+        }
+    ],
+    "totalInvested": {
+        "amount": "3816.4299480011",
+        "currency": "USD"
+    },
+    "totalMarketValue": {
+        "amount": "4378.8045437805",
+        "currency": "USD"
+    },
+    "totalUnrealizedPnl": {
+        "amount": "562.3745957794",
+        "currency": "USD"
+    },
+    "unpricedTickers": [],
+    "baseCurrency": "USD"
+}

@@ -187,3 +187,29 @@ export function formatScore(value: string, options: FormatDecimalOptions = {}): 
   const decimals = options.decimals ?? 1
   return formatDecimalString(value, decimals, false)
 }
+
+/**
+ * Formats a quantity string (e.g. `PositionDto.quantity`) by trimming
+ * trailing fractional zeros, so a whole-share holding reads "4" rather
+ * than "4.0000000000". Pure string trimming over the existing decimal
+ * text, like every other formatter here — no `Number()`, no rounding.
+ */
+export function formatQuantity(value: string): string {
+  const { sign, digits } = splitSign(value)
+  const dotIndex = digits.indexOf('.')
+  if (dotIndex === -1) {
+    return `${sign}${digits}`
+  }
+
+  const integerPart = digits.slice(0, dotIndex)
+  const fractionPart = digits.slice(dotIndex + 1)
+
+  let end = fractionPart.length
+  while (end > 0 && fractionPart[end - 1] === '0') {
+    end -= 1
+  }
+  const trimmedFraction = fractionPart.slice(0, end)
+
+  const body = trimmedFraction.length > 0 ? `${integerPart}.${trimmedFraction}` : integerPart
+  return `${sign}${body}`
+}

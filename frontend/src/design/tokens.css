@@ -61,7 +61,23 @@
   /* ---- space: component-specific gaps (beyond Tailwind's default scale) */
   --spacing-cell-x: 0.5rem; /* 8px horizontal cell padding, tight tables */
   --spacing-row-y: 0.25rem; /* 4px vertical row padding, tight tables */
+  --spacing-row-y-dense: 0.125rem; /* 2px: Task 8's tighter row for the fifteen-column signals table — extends this scale, does not replace it */
   --spacing-gutter: 1rem; /* 16px panel gutter */
+
+  /*
+   * ---- colour: data table (Task 6, reused verbatim by Task 8's denser
+   * signals table) --------------------------------------------------------
+   *
+   * Header-row treatment and the zebra-vs-separator question this task
+   * owns: no rule is drawn between rows — the design direction is
+   * elevation by lightness, not borders — so the header gets one
+   * lightness step up (equal to --color-surface-2) and alternate rows get
+   * a nudge too subtle to read as a line, only as a faint banding that
+   * helps the eye track a row across eight (later fifteen) columns.
+   */
+  --color-table-header: #1b1e24; /* header row background */
+  --color-table-row-stripe: #171920; /* zebra: between --color-ground and --color-surface-1 */
+  --color-table-row-hover: #20242c; /* hovered or keyboard-focused row */
 
   /*
    * ---- colour & motion: shared states (loading, error, empty) -----------
