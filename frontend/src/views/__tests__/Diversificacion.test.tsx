@@ -63,12 +63,13 @@ describe('a compliant report (the real captured, zero-violation backend state)',
   })
 })
 
-describe('a report with a ticker violation and a sector violation', () => {
-  it('renders both violations with their subjects and weights', async () => {
+describe('a report with an equity violation, an ETF violation, and a sector violation', () => {
+  it('renders all three violations with their subjects and weights', async () => {
     const withViolations = clone()
     withViolations.compliant = false
     withViolations.violations = [
-      { limit: 'SINGLE_STOCK', subject: 'EC', actualWeight: '21.5000', allowedWeight: '20.0000' },
+      { limit: 'SINGLE_EQUITY', subject: 'EC', actualWeight: '21.5000', allowedWeight: '20.0000' },
+      { limit: 'SINGLE_ETF', subject: 'QQQ', actualWeight: '26.0000', allowedWeight: '25.0000' },
       { limit: 'SECTOR', subject: 'Energy', actualWeight: '31.2000', allowedWeight: '30.0000' },
     ]
     mockDiversification(withViolations)
@@ -77,13 +78,38 @@ describe('a report with a ticker violation and a sector violation', () => {
     await screen.findByText('TERPEL')
     expect(screen.getByText(/no cumple los límites/i)).toBeInTheDocument()
 
-    const tickerRow = screen.getByTestId('weight-row-EC')
-    expect(within(tickerRow).getAllByText(/excede el límite/i).length).toBeGreaterThan(0)
-    expect(within(tickerRow).getByText(/21\.50%/)).toBeInTheDocument()
+    const equityRow = screen.getByTestId('weight-row-EC')
+    expect(within(equityRow).getAllByText(/excede el límite/i).length).toBeGreaterThan(0)
+    expect(within(equityRow).getByText(/21\.50%/)).toBeInTheDocument()
+
+    const etfRow = screen.getByTestId('weight-row-QQQ')
+    expect(within(etfRow).getAllByText(/excede el límite/i).length).toBeGreaterThan(0)
+    expect(within(etfRow).getByText(/26\.00%/)).toBeInTheDocument()
 
     const sectorRow = screen.getByTestId('weight-row-Energy')
     expect(within(sectorRow).getAllByText(/excede el límite/i).length).toBeGreaterThan(0)
     expect(within(sectorRow).getByText(/31\.20%/)).toBeInTheDocument()
+
+    // The enum constant names must never reach the DOM verbatim — each is
+    // rendered through its Spanish label.
+    expect(screen.queryByText(/SINGLE_EQUITY/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/SINGLE_ETF/)).not.toBeInTheDocument()
+    expect(screen.getAllByText(/acción individual/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/fondo individual/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/\(sector\)/i).length).toBeGreaterThan(0)
+  })
+
+  it('falls back to the raw value for an unrecognised limit kind, rather than throwing or blanking', async () => {
+    const withViolations = clone()
+    withViolations.compliant = false
+    withViolations.violations = [
+      { limit: 'SOME_FUTURE_LIMIT', subject: 'EC', actualWeight: '21.5000', allowedWeight: '20.0000' },
+    ]
+    mockDiversification(withViolations)
+    renderDiversificacion()
+
+    await screen.findByText('TERPEL')
+    expect(screen.getAllByText(/SOME_FUTURE_LIMIT/).length).toBeGreaterThan(0)
   })
 })
 

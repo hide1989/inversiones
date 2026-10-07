@@ -37,6 +37,24 @@ function findViolation(violations: ReadonlyArray<DiversificationViolation>, subj
   return violations.find((violation) => violation.subject === subject)
 }
 
+// `DiversificationViolationDto.from()` serializes `violation.limit().name()`
+// straight onto the wire, so the real values are the Java enum's constant
+// names — SINGLE_EQUITY, SINGLE_ETF, SECTOR — never translated server-side.
+// A Spanish-speaking user should not see the literal constant, so each is
+// mapped to a short Spanish label here. An unrecognised value (a limit
+// kind this map has not been told about yet) renders verbatim rather than
+// throwing or going blank — the honest fallback when the wire sends
+// something this view does not know how to label.
+const LIMIT_LABELS: Record<string, string> = {
+  SINGLE_EQUITY: 'acción individual',
+  SINGLE_ETF: 'fondo individual',
+  SECTOR: 'sector',
+}
+
+function limitLabel(limit: string): string {
+  return LIMIT_LABELS[limit] ?? limit
+}
+
 /**
  * A fixed 0-100% track. The filled bar's `width` and each ceiling
  * marker's `left` are literal string interpolations of percentage
@@ -68,7 +86,7 @@ function WeightTrack({ weight, ceilings, exceeded }: { weight: string; ceilings:
 function ViolationNote({ violation }: { violation: DiversificationViolation }) {
   return (
     <p className="font-sans text-xs text-negative">
-      Excede el límite ({violation.limit}): {formatPercent(violation.actualWeight)} de un máximo de{' '}
+      Excede el límite ({limitLabel(violation.limit)}): {formatPercent(violation.actualWeight)} de un máximo de{' '}
       {formatPercent(violation.allowedWeight)}.
     </p>
   )
@@ -128,7 +146,7 @@ function ComplianceBanner({ report }: { report: DiversificationReport }) {
         {report.violations.map((violation) => (
           <li key={`${violation.subject}-${violation.limit}`} className="font-sans text-sm text-negative">
             {violation.subject}: {formatPercent(violation.actualWeight)} de un máximo de{' '}
-            {formatPercent(violation.allowedWeight)} ({violation.limit})
+            {formatPercent(violation.allowedWeight)} ({limitLabel(violation.limit)})
           </li>
         ))}
       </ul>
