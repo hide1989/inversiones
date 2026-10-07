@@ -271,7 +271,13 @@ function HistoryPanel({ ticker, onClose }: { ticker: string; onClose: () => void
 export function Senales() {
   const { data, isPending, isError, error, refetch } = useSignalsDashboard()
   const [openedTicker, setOpenedTicker] = useState<string | null>(null)
-  const [sort, setSort] = useState<DataTableSort | null>(null)
+  // Defaults to combined score descending — matching the API's own
+  // order — as a real instruction, not an accident that merely holds
+  // because the backend happens to pre-sort: sortSignals below always
+  // re-sorts, and the Score header's aria-sort reflects this from the
+  // very first render instead of reporting 'none' while the rows are
+  // visibly ordered.
+  const [sort, setSort] = useState<DataTableSort | null>({ key: 'combined', direction: 'desc' })
 
   if (isPending) {
     return <LoadingState rows={8} />

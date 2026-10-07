@@ -29,6 +29,40 @@ function mockHistory(body: ReadonlyArray<Record<string, unknown>>) {
   )
 }
 
+// A deliberately shuffled copy of the scored fixture's signals — same
+// rows, same scores, just not in combined-score order. Asserting
+// descending order against this proves the view sorts; asserting it
+// against the fixture's own already-descending order would pass even
+// against an implementation that does no sorting at all.
+function shuffledScoredSignals() {
+  const byTicker = new Map(validSignalsScoredResponse.signals.map((signal) => [signal.ticker, signal]))
+  const order = ['GLD', 'TSLA', 'QQQ', 'GOOGL', 'MSFT', 'AMZN']
+  return order.map((ticker) => {
+    const signal = byTicker.get(ticker)
+    if (signal === undefined) throw new Error(`fixture missing ${ticker}`)
+    return signal
+  })
+}
+
+// A fixture whose TECHNICAL ranking deliberately disagrees with its
+// combined-score ranking, so clicking the TECHNICAL header produces a
+// visibly different row order than the default — proving the column
+// comparator actually re-sorts, not just that the initial API order
+// happens to agree with it (which the scored fixture above would not
+// have shown: its TECHNICAL values already rank the same as its
+// combined scores).
+const signalsWithDivergentTechnicalRanking = {
+  ...validSignalsScoredResponse,
+  signals: [
+    { ticker: 'QQQ', snapshot: { ticker: 'QQQ', snapshotDate: '2026-10-06', scores: { TECHNICAL: '3.0' } }, score: { value: '8.40', level: 'STRONG_BUY', usedSources: ['TECHNICAL'] } },
+    { ticker: 'MSFT', snapshot: { ticker: 'MSFT', snapshotDate: '2026-10-06', scores: { TECHNICAL: '9.5' } }, score: { value: '7.20', level: 'BUY', usedSources: ['TECHNICAL'] } },
+    { ticker: 'AMZN', snapshot: { ticker: 'AMZN', snapshotDate: '2026-10-06', scores: { TECHNICAL: '8.0' } }, score: { value: '6.10', level: 'BUY', usedSources: ['TECHNICAL'] } },
+    { ticker: 'TSLA', snapshot: { ticker: 'TSLA', snapshotDate: '2026-10-06', scores: { TECHNICAL: '7.0' } }, score: { value: '4.80', level: 'HOLD', usedSources: ['TECHNICAL'] } },
+    { ticker: 'GOOGL', snapshot: { ticker: 'GOOGL', snapshotDate: '2026-10-06', scores: { TECHNICAL: '6.0' } }, score: { value: '3.10', level: 'SELL', usedSources: ['TECHNICAL'] } },
+    { ticker: 'GLD', snapshot: { ticker: 'GLD', snapshotDate: '1970-01-01', scores: {} }, score: { value: '0.00', level: 'STRONG_SELL', usedSources: [] } },
+  ],
+}
+
 function renderView() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -68,7 +102,10 @@ describe('the real no-data capture (every seeded ticker, zero sources)', () => {
 
 describe('the derived scored variant', () => {
   it('renders in combined-score-descending order, including a mixed no-data row', async () => {
-    mockSignals(validSignalsScoredResponse)
+    // The API body itself is shuffled (see shuffledScoredSignals), so this
+    // only passes if the view actually sorts by combined score — not
+    // because the fixture already arrived in that order.
+    mockSignals({ ...validSignalsScoredResponse, signals: shuffledScoredSignals() })
     mockHistory([])
     renderView()
 
@@ -82,6 +119,12 @@ describe('the derived scored variant', () => {
       'signal-row-GOOGL',
       'signal-row-GLD',
     ])
+
+    // The default sort is a real instruction, not an accident that merely
+    // holds because the API happened to pre-sort: the Score header must
+    // report its own state via aria-sort from the very first render.
+    const scoreHeader = screen.getByRole('columnheader', { name: /score/i })
+    expect(scoreHeader).toHaveAttribute('aria-sort', 'descending')
   })
 
   it('renders the source count beside each combined score', async () => {
@@ -97,7 +140,12 @@ describe('the derived scored variant', () => {
   })
 
   it('sorts by a per-source column using the shared decimal comparator, not a numeric coercion', async () => {
-    mockSignals(validSignalsScoredResponse)
+    // TECHNICAL's ranking here deliberately disagrees with the combined
+    // score's ranking (see signalsWithDivergentTechnicalRanking), so the
+    // row order after clicking the header is visibly different from the
+    // default — proving the click re-sorts by TECHNICAL rather than the
+    // rows merely staying in whatever order they already had.
+    mockSignals(signalsWithDivergentTechnicalRanking)
     mockHistory([])
     renderView()
 
@@ -108,13 +156,13 @@ describe('the derived scored variant', () => {
 
     const rows = await screen.findAllByTestId(/^signal-row-/)
     const tickerOrder = rows.map((row) => row.getAttribute('data-testid'))
-    // Descending by TECHNICAL: QQQ 8.1, MSFT 7.5, TSLA 5.2, AMZN 6.0, GOOGL 3.5, GLD has none.
+    // Descending by TECHNICAL: MSFT 9.5, AMZN 8.0, TSLA 7.0, GOOGL 6.0, QQQ 3.0, GLD has none.
     expect(tickerOrder).toEqual([
-      'signal-row-QQQ',
       'signal-row-MSFT',
       'signal-row-AMZN',
       'signal-row-TSLA',
       'signal-row-GOOGL',
+      'signal-row-QQQ',
       'signal-row-GLD',
     ])
   })
