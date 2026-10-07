@@ -436,6 +436,13 @@ force produced it, which is the entire reason the backend separates them.
 - `averageScore` and `levelCounts` as summary tiles.
 - A per-ticker history chart from `/signals/history`, loaded on demand rather than for every ticker on mount.
 - **The same Recharts rule as Task 7:** import it only inside this lazy route, never from a shared module, so it does not land in the main chunk that every other route loads.
+- **Extend `DataTableColumn` with a width hint; do not work around its absence.** Task 6's review
+  identified this as the one real gap for this table: `DataTableColumn` currently has no width or
+  min-width field, and fifteen columns — six near-identical per-source scores, plus combined score,
+  level and source count — need different widths than a ticker. Without a per-column hint you would
+  either fight the default equal-width table layout or invent a parallel sizing scheme, and that
+  parallel invention is exactly what reusing the primitive is meant to prevent. Add the field to the
+  shared primitive and let Task 6's eight-column table keep working unchanged.
 
 **Tests:** the table renders in score-descending order; a no-data ticker shows the label and does not display `0.00` as a score or a sell level — asserted on rendered text; the source count renders beside each score; sorting by a per-source column works; the history chart fetches only when a ticker is opened; the summary tiles render from the API values.
 
