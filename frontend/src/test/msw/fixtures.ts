@@ -2,6 +2,23 @@
 // docs/superpowers/plans/2026-10-06-frontend-spa.md, used by MSW handlers
 // in tests so no test depends on the live backend.
 
+export const validLoginResponse = {
+  token: 'test-token-abc123',
+  expiresAt: '2026-10-07T00:00:00Z',
+  username: 'david',
+}
+
+// The backend returns a byte-identical body for a wrong password and an
+// unknown username, to prevent username enumeration. One fixture represents
+// both failure causes on purpose.
+export const invalidLoginProblem = {
+  type: 'https://api.inversiones.local/errors/unauthorized',
+  title: 'Unauthorized',
+  status: 401,
+  detail: 'usuario o contraseña incorrectos',
+  instance: '/api/v1/auth/login',
+}
+
 export const validPortfolioResponse = {
   positions: [
     {
