@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../../test/msw/server'
 import { portfolioKeys } from '../../api/queries/portfolio'
+import { returnsKeys } from '../../api/queries/returns'
+import { diversificationKeys } from '../../api/queries/diversification'
 import { Transacciones } from '../Transacciones'
 
 const API_BASE = 'http://localhost:8080/api/v1'
@@ -192,11 +194,16 @@ describe('filters', () => {
 })
 
 describe('creating a transaction', () => {
-  it('posts the exact decimal strings unchanged and invalidates the portfolio query', async () => {
+  it('posts the exact decimal strings unchanged and invalidates transactions, portfolio, returns and diversification', async () => {
     mockList()
     const user = userEvent.setup()
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // portfolio/returns/diversification are never fetched by this view, so — unlike the
+    // transactions list, which gets populated by the view's own GET below — their cache
+    // entries must be seeded here for invalidateQueries to have anything to mark.
     queryClient.setQueryData(portfolioKeys.all, { seeded: true })
+    queryClient.setQueryData(returnsKeys.all, { seeded: true })
+    queryClient.setQueryData(diversificationKeys.all, { seeded: true })
     renderView(queryClient)
 
     await screen.findByTestId('transaction-row-1')
@@ -215,6 +222,10 @@ describe('creating a transaction', () => {
     await user.type(within(form).getByLabelText('Cantidad'), '0.4863720000')
     await user.type(within(form).getByLabelText('Precio unitario'), '616.8118230490')
     await user.type(within(form).getByLabelText('Fecha'), '2026-06-30')
+    // Captured before submitting: the transactions list is actively observed by
+    // this mounted view, so its invalidation triggers an automatic refetch almost
+    // immediately — a baseline taken any later could already include it.
+    const listRequestsBeforeSubmit = capturedListUrls.length
     await user.click(within(form).getByRole('button', { name: /^guardar$/i }))
 
     await waitFor(() => expect(captured.body).not.toBeNull())
@@ -226,8 +237,21 @@ describe('creating a transaction', () => {
     expect(captured.body?.unitPrice).toBe('616.8118230490')
     expect(captured.body?.fees).toBeUndefined()
 
+    // By the time a `waitFor` could read the transactions query's `isInvalidated`
+    // flag, its automatic refetch (it is actively observed) may have already
+    // flipped it back to false. A second GET on the same endpoint is the
+    // observable proof of that invalidation instead.
+    await waitFor(() => {
+      expect(capturedListUrls.length).toBeGreaterThan(listRequestsBeforeSubmit)
+    })
+
+    // portfolio/returns/diversification have no active observer anywhere in this
+    // view, so an invalidated entry simply stays marked invalidated (nothing
+    // refetches it) — isInvalidated is a stable, directly assertable signal here.
     await waitFor(() => {
       expect(queryClient.getQueryState(portfolioKeys.all)?.isInvalidated).toBe(true)
+      expect(queryClient.getQueryState(returnsKeys.all)?.isInvalidated).toBe(true)
+      expect(queryClient.getQueryState(diversificationKeys.all)?.isInvalidated).toBe(true)
     })
   })
 
@@ -310,6 +334,60 @@ describe('editing a transaction', () => {
     // with it, and the server's own rejection is what renders.
     await waitFor(() => expect(capturedBody?.tradedAt).toBe('2099-01-01'))
     expect(await screen.findByText('tradedAt no puede ser una fecha futura')).toBeInTheDocument()
+  })
+
+  it('submits a valid edit, closes the form, and shows the updated row once the invalidated list refetches', async () => {
+    const updatedTx = { ...txQqq, quantity: '0.5000000000' }
+    let listCallCount = 0
+    server.use(
+      http.get(`${API_BASE}/transactions`, () => {
+        listCallCount += 1
+        // First load (initial render) returns the original row; the second load —
+        // triggered only by the mutation's own invalidation, not a manual refetch —
+        // returns the recalculated one. If the mutation stopped invalidating the
+        // transactions query, listCallCount would stay at 1 and the row would never
+        // show the updated quantity.
+        return HttpResponse.json(listCallCount === 1 ? [txQqq, txVoo] : [updatedTx, txVoo])
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderView()
+
+    const row = await screen.findByTestId('transaction-row-1')
+    await user.click(within(row).getByRole('button', { name: /editar/i }))
+
+    const form = screen.getByTestId('transaction-form')
+    const quantityField = within(form).getByLabelText('Cantidad')
+
+    const captured: { body: Record<string, unknown> | null } = { body: null }
+    mockUpdate((_id, body) => {
+      captured.body = body
+      return HttpResponse.json(updatedTx, { status: 200 })
+    })
+
+    await user.clear(quantityField)
+    await user.type(quantityField, '0.5000000000')
+    await user.click(within(form).getByRole('button', { name: /^guardar$/i }))
+
+    await waitFor(() => expect(captured.body?.quantity).toBe('0.5000000000'))
+    // The fields the user did not touch still travel with the edit, unchanged —
+    // an edit is a full replacement of the trade, not a partial patch.
+    expect(captured.body?.ticker).toBe('QQQ')
+    expect(captured.body?.brokerName).toBe('Hapi')
+    expect(captured.body?.type).toBe('BUY')
+    expect(captured.body?.tradedAt).toBe('2026-06-30')
+
+    // The form closes on success — unlike the 400 case above, where it stays open.
+    await waitFor(() => expect(screen.queryByTestId('transaction-form')).not.toBeInTheDocument())
+
+    // The recalculated row (this is where an average-cost recalculation would
+    // surface) renders only because the mutation invalidated the list and it
+    // refetched — not because of any client-side merge of the response.
+    await waitFor(() => {
+      const updatedRow = screen.getByTestId('transaction-row-1')
+      expect(within(updatedRow).getByText('0.5')).toBeInTheDocument()
+    })
   })
 })
 
