@@ -3,7 +3,7 @@ import { z } from 'zod'
 // Mirrors AiSynthesisDto.
 export const AiSynthesisItemSchema = z.object({
   ticker: z.string(),
-  snapshotDate: z.string(),
+  snapshotDate: z.iso.date(),
   iaScore: z.string(),
   signal: z.string(),
   conviction: z.string(),

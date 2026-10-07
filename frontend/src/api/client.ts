@@ -34,17 +34,32 @@ export class SchemaValidationError extends Error {
   }
 }
 
+/**
+ * Reads the response body exactly once as text, then — only for a
+ * `problem+json` content type — attempts to JSON-parse and schema-parse
+ * that text. Either failure (invalid JSON, or JSON that fails
+ * ProblemDetailSchema) falls back to the raw text as `detail`, so a
+ * malformed error body still produces a usable ApiError instead of an
+ * uncaught SyntaxError, and the raw body is never lost to a second,
+ * already-consumed `.text()` read.
+ */
 async function readProblem(response: Response, instance: string): Promise<ProblemDetail> {
+  const rawText = await response.text().catch(() => '')
   const contentType = response.headers.get('content-type') ?? ''
+
   if (contentType.includes('application/problem+json')) {
-    const body: unknown = await response.json()
-    const parsed = ProblemDetailSchema.safeParse(body)
-    if (parsed.success) {
-      return parsed.data
+    try {
+      const body: unknown = JSON.parse(rawText)
+      const parsed = ProblemDetailSchema.safeParse(body)
+      if (parsed.success) {
+        return parsed.data
+      }
+    } catch {
+      // rawText was not valid JSON — fall through to the raw-text fallback below.
     }
   }
-  const detail = await response.text().catch(() => '')
-  return fallbackProblem(response.status, response.statusText, detail, instance)
+
+  return fallbackProblem(response.status, response.statusText, rawText, instance)
 }
 
 export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {

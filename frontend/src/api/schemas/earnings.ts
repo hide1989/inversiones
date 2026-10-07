@@ -3,7 +3,7 @@ import { z } from 'zod'
 // Mirrors EarningsEventDto, returned as an array by GET /earnings.
 export const EarningsEventSchema = z.object({
   ticker: z.string(),
-  reportDate: z.string(),
+  reportDate: z.iso.date(),
   daysRemaining: z.number(),
   estimatedEps: z.string(),
   historicalSurprise: z.string(),

@@ -6,7 +6,7 @@ export const ExchangeRateSchema = z.object({
   base: z.string(),
   quote: z.string(),
   rate: z.string(),
-  rateDate: z.string(),
+  rateDate: z.iso.date(),
 })
 
 export type ExchangeRate = z.infer<typeof ExchangeRateSchema>

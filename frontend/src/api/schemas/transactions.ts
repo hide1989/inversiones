@@ -10,7 +10,7 @@ export const TransactionRequestSchema = z.object({
   unitPrice: z.string(),
   currency: CurrencySchema,
   fees: z.string().optional(),
-  tradedAt: z.string(),
+  tradedAt: z.iso.date(),
 })
 
 export type TransactionRequest = z.infer<typeof TransactionRequestSchema>
@@ -24,7 +24,7 @@ export const TransactionResponseSchema = z.object({
   quantity: z.string(),
   unitPrice: MoneySchema,
   fees: MoneySchema,
-  tradedAt: z.string(),
+  tradedAt: z.iso.date(),
   grossAmount: MoneySchema,
   netAmount: MoneySchema,
 })

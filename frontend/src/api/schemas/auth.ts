@@ -3,7 +3,7 @@ import { z } from 'zod'
 // Mirrors POST /auth/login's response.
 export const LoginResponseSchema = z.object({
   token: z.string(),
-  expiresAt: z.string(),
+  expiresAt: z.iso.datetime(),
   username: z.string(),
 })
 

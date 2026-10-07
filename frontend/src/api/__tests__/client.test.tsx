@@ -125,6 +125,54 @@ describe('a 401 response', () => {
   })
 })
 
+describe('a problem+json response whose body is not valid JSON', () => {
+  it('produces a usable ApiError, not an uncaught SyntaxError, with the raw body as detail', async () => {
+    server.use(
+      http.get(`${API_BASE}/portfolio`, () =>
+        new HttpResponse('not actually json {{{', {
+          status: 400,
+          headers: { 'Content-Type': 'application/problem+json' },
+        }),
+      ),
+    )
+
+    let caught: unknown
+    try {
+      await apiFetch('/portfolio', PortfolioResponseSchema)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(ApiError)
+    expect(caught).not.toBeInstanceOf(SyntaxError)
+    expect((caught as ApiError).problem.detail).toBe('not actually json {{{')
+  })
+})
+
+describe('a problem+json response that is valid JSON but fails ProblemDetailSchema', () => {
+  it('produces a usable error that preserves the raw body as detail', async () => {
+    server.use(
+      http.get(`${API_BASE}/portfolio`, () =>
+        HttpResponse.json(
+          { status: 400, title: 'Bad Request' }, // missing type/detail/instance
+          { status: 400, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+
+    let caught: unknown
+    try {
+      await apiFetch('/portfolio', PortfolioResponseSchema)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(ApiError)
+    expect((caught as ApiError).problem.detail).toContain('"status":400')
+    expect((caught as ApiError).problem.detail).toContain('"title":"Bad Request"')
+  })
+})
+
 describe('TotalReturnResponse with the currency effect unavailable', () => {
   it('parses successfully rather than being rejected as malformed', async () => {
     server.use(http.get(`${API_BASE}/portfolio/returns`, () => HttpResponse.json(totalReturnUnavailable)))

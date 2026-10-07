@@ -3,7 +3,7 @@ import { z } from 'zod'
 // Mirrors SignalSnapshotDto.
 export const SignalSnapshotSchema = z.object({
   ticker: z.string(),
-  snapshotDate: z.string(),
+  snapshotDate: z.iso.date(),
   scores: z.record(z.string(), z.string()),
 })
 
