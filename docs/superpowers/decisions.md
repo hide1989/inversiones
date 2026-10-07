@@ -60,3 +60,86 @@ discutirla.
 
 14. USER DECISIONS (asked, not ruled) — both settle questions I had deliberately not taken alone: 1. Portfolio cost leg: KEEP both legs at today's TRM. The user chose the current behaviour, so /portfolio reports asset-only P&L and /portfolio/returns remains the single place the currency effect is broken out, at the cost of an "invested" figure that moves with the rate. This confirms my pushback against the final review's proposed fix: converting the cost leg at the base rate would have folded the currency effect into /portfolio's P&L — the same conflation, relocated. No change to GetPortfolioUseCase's conversion semantics. 2. TRM fallback: REPORT THE ABSENCE. Option (A) is now a settled decision rather than my preference — no rate means /portfolio/returns says the currency effect is unavailable and peso positions come back unpriced, reusing the ValuedPosition.priced concept the codebase already has. Consistent with how absent signal sources and missing quotes are already handled, and it makes the "absent means absent" rule actually uniform across the application instead of holding in three places and failing in the fourth.
 
+
+## Where the signal-refresh overlap guard lives once a button can also trigger it (Task 13)
+
+**Context.** `RefreshSignalSnapshotUseCase.execute()` must never run concurrently with itself —
+two overlapping runs write the same day's snapshot rows. Today the guard is an `AtomicBoolean` in
+`SignalSnapshotSchedulerConfig` (module `applications/app-service`), which protects the cron and
+nothing else. Task 13 adds `POST /api/v1/signals/refresh`, a second caller, in
+`SignalController` (module `infrastructure/entry-points/api-rest`).
+
+**The trap.** Giving the controller its own `AtomicBoolean` looks like "the same guard" but provides
+**zero** mutual exclusion between the two callers: two independent booleans cannot exclude each
+other, so the cron and a button press can still overlap. The guard must be one shared instance.
+
+**Why it cannot be a new component in app-service.** `api-rest` does not depend on `app-service`
+— the dependency runs the other way, with app-service as the composition root. A coordinator bean
+placed there is invisible to the controller.
+
+**Ruling.** Move the guard *into* `RefreshSignalSnapshotUseCase` (module `domain/usecase`), which
+both callers already inject and which Spring wires as a single bean, so the two callers share one
+guard structurally rather than by discipline. `AtomicBoolean` is plain `java.util.concurrent`, so
+the domain's zero-framework rule is not broken. This is also the better home on the merits: "this
+operation must not run concurrently with itself" is a property of the operation, not of its
+callers — the current placement leaves the invariant enforced for one caller and unenforced for
+any future one, which is precisely the bug Task 13 would otherwise introduce.
+
+**The domain must not know about HTTP**, so `execute()` returns an outcome the callers map
+themselves: a count when it ran, a distinct "already running" result when the guard refused.
+- cron: on refusal, log a warning and skip — current behaviour, preserved.
+- endpoint: on refusal, **HTTP 409 Conflict** with a `ProblemDetail`. It must NOT return 200: a 200
+  tells the user a refresh happened when none did, and the figures they then read are the old ones.
+
+**Cost if wrong.** The guard sits one module deeper than strictly needed. Cheap to move back, and
+far cheaper than the overlapping-writes race the duplicated-boolean alternative would ship.
+
+## Rendering a weight bar against its ceiling without dividing (Task 10)
+
+Task 10's brief asks for "a bar per weight against a ceiling line", which is the same shape that
+produced a contradiction in Task 7: sizing a bar *proportionally to another quantity* requires
+dividing one by the other, which non-negotiable #1 forbids in the browser.
+
+**Ruling: a fixed 0-100% track, where both the weight and its ceiling are positioned by their own
+percentage strings handed straight to CSS.** The API returns weights already as percentages
+(`weightByTicker` values like `'3.4417'`), so `width: 3.4417%` and a ceiling marker at
+`left: 20%` are literal string interpolations into a style — CSS does the parsing, and no
+JavaScript arithmetic touches either number. Nothing is divided, nothing is coerced.
+
+What this forbids: normalizing the track so the ceiling always sits at a fixed position (say 80% of
+the width). That *is* actual/allowed division and is not allowed. The cost is that a 3.44% weight
+against a 20% ceiling renders as a short bar in a mostly-empty track — which is the honest picture
+of a portfolio nowhere near its limit, not a defect to design away.
+
+**Violation state comes from the API's `violations` array and `compliant` flag only.** Do not invent
+a "approaching the limit" warning tier: the backend defines no such threshold, and inventing one
+client-side makes up a business rule. (`compareDecimalStrings` is string-wise and would be
+*mechanically* safe to compare with — the objection here is inventing the rule, not the arithmetic.)
+
+## The AI synthesis average is live proof of a zero that must not be displayed (Task 11)
+
+Checked against the running backend: `/api/v1/ai-synthesis` currently returns `withData: []`, all
+15 tickers in `withoutData`, and **`averageScore: "0.00"`**. The average is computed over zero
+scored tickers and is meaningless.
+
+**Ruling: when `withData` is empty, the UI must not render `averageScore` as a figure at all.** It
+states that no ticker has AI data and that no average can be computed. Rendering "0.00" tells the
+user their portfolio scores zero out of ten — the same family of defect as the fabricated TRM
+(Plan 2) and the `0.00`/`STRONG_SELL` rows in the signals table (Task 8), and the one this project
+keeps re-encountering: **a zero that means "absent" displayed as a zero that means "measured".**
+This is not a hypothetical edge case; it is the app's behaviour against live data today, so the
+test for it asserts against the real shape and must not permit a bare `0` to reach the DOM.
+
+Where `withData` is non-empty, the average must still be labelled as covering only those tickers,
+with the `withoutData` ones listed as explicitly excluded.
+
+## Live contract facts for Task 11, confirmed against the running backend
+
+- `/api/v1/earnings` returns `[]`. The earnings view renders its empty state against live data, so
+  "ordered by proximity" cannot be confirmed live and must be proven by fixture.
+- `/api/v1/watchlist` returns 31 items with `price: null` and `technicalScore: null` on at least the
+  first, so null-handling is the common path here, not the edge.
+- **The watchlist's `signal` values are Spanish (`"COMPRA"`)**, a different vocabulary from the
+  `BUY`/`HOLD`/`STRONG_SELL` enum used elsewhere in the contract. Render what the API sends; do NOT
+  map it into the other vocabulary to make the two views look uniform. If the schema does not
+  already accommodate this, report the mismatch rather than widening the schema silently.
