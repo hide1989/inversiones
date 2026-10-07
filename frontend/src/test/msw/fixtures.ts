@@ -290,6 +290,182 @@ export const validDiversificationResponse = {
 // yet), so this invents five consecutive trading days trending toward
 // the scored fixture's QQQ combined score of 8.40, to exercise the
 // on-demand sparkline with a shape a real history would plausibly have.
+// Captured verbatim from the running backend's GET /ai-synthesis: the
+// scheduled AI synthesis job had not run yet, so every one of the 15
+// seeded tickers is in `withoutData` and `averageScore` is the backend's
+// "0.00" computed over zero scored tickers — meaningless, not a real
+// score. This is the shape the view must defend against: a `0` that
+// means "absent" must never reach the DOM as if it meant "measured".
+export const validAiSynthesisEmptyResponse = {
+  withData: [],
+  withoutData: [
+    'AMZN', 'EC', 'GLD', 'GOOGL', 'IBIT', 'MSFT', 'NU', 'NLR', 'QQQ',
+    'SMH', 'SPCX', 'TSLA', 'TSM', 'TTWO', 'VOO',
+  ],
+  averageScore: '0.00',
+}
+
+// A derived variant with real data for some tickers — there is no live
+// capture with any `withData` entries yet (the capture above is the live
+// state), so this is hand-built to exercise the normal rendering path:
+// two scored tickers and three left in `withoutData`, with `averageScore`
+// authored as what the backend would compute over the two scored tickers
+// only (never computed by this fixture, let alone by the view).
+export const validAiSynthesisWithDataResponse = {
+  withData: [
+    {
+      ticker: 'AAPL',
+      snapshotDate: '2026-10-06',
+      iaScore: '8.20',
+      signal: 'BUY',
+      conviction: 'HIGH',
+      horizon: 'MEDIUM_TERM',
+      summary:
+        'El impulso en servicios y la expansión de márgenes sostienen una tesis constructiva de mediano plazo.',
+      catalysts: ['Lanzamiento de nuevo hardware', 'Crecimiento en servicios'],
+      risks: ['Desaceleración en China', 'Presión regulatoria en la App Store'],
+    },
+    {
+      ticker: 'MSFT',
+      snapshotDate: '2026-10-06',
+      iaScore: '7.40',
+      signal: 'HOLD',
+      conviction: 'MEDIUM',
+      horizon: 'LONG_TERM',
+      summary: 'El crecimiento en la nube compensa la desaceleración en licenciamiento tradicional.',
+      catalysts: ['Adopción de Copilot'],
+      risks: ['Competencia en infraestructura cloud'],
+    },
+  ],
+  withoutData: ['AMZN', 'GLD', 'NU'],
+  averageScore: '7.80',
+}
+
+// Captured verbatim from the running backend's GET /fundamentals/NU: a
+// stock (isEtf: false) with hasData: true but three metrics null, plus
+// float-artifact decimal strings (roe, peg, beta) the view must route
+// through formatDecimalString rather than display verbatim.
+export const validFundamentalsStockResponse = {
+  ticker: 'NU',
+  isEtf: false,
+  hasData: true,
+  per: '20.9712',
+  peg: '0.3662433623319399',
+  priceToBook: '7.066',
+  priceToSales: '3.9114',
+  evToEbitda: '25.9002',
+  roe: '30.259999999999998',
+  netMargin: '18.65',
+  revenueCagr5y: null,
+  epsCagr5y: null,
+  debtToEquity: '4.1747',
+  beta: '0.96430856',
+  dividendYield: null,
+  currentRatio: '0.1973',
+}
+
+// Captured verbatim from the running backend's GET /fundamentals/QQQ: an
+// ETF (isEtf: true) with hasData: true, yet eleven of the twelve
+// nullable metrics are null — only `beta` is present. This is the exact
+// shape that must NOT drive a P/E-grid render just because hasData is
+// true: `isEtf` picks which multiples are meaningful, and per-metric
+// presence decides what actually renders.
+export const validFundamentalsEtfResponse = {
+  ticker: 'QQQ',
+  isEtf: true,
+  hasData: true,
+  per: null,
+  peg: null,
+  priceToBook: null,
+  priceToSales: null,
+  evToEbitda: null,
+  roe: null,
+  netMargin: null,
+  revenueCagr5y: null,
+  epsCagr5y: null,
+  debtToEquity: null,
+  beta: '1.2417293',
+  dividendYield: null,
+  currentRatio: null,
+}
+
+// No fundamentals exist for this ticker at all — `hasData: false`, every
+// nullable metric null. Not a live capture (no seeded ticker returned
+// this) and `beta` was never observed null in either live sample
+// (NU or QQQ), so the schema keeps it required — this fixture respects
+// that by giving it a placeholder value rather than asserting a null
+// shape the backend has not actually been seen to send.
+export const fundamentalsNoDataResponse = {
+  ticker: 'NOPE',
+  isEtf: false,
+  hasData: false,
+  per: null,
+  peg: null,
+  priceToBook: null,
+  priceToSales: null,
+  evToEbitda: null,
+  roe: null,
+  netMargin: null,
+  revenueCagr5y: null,
+  epsCagr5y: null,
+  debtToEquity: null,
+  beta: '0.0000000',
+  dividendYield: null,
+  currentRatio: null,
+}
+
+// Captured verbatim from the running backend's GET /watchlist: 31 items,
+// 12 of them null for both `price` and `technicalScore` (the DTO's
+// documented "frequently absent upstream" fields), using the Spanish
+// COMPRA/FUERTE COMPRA/MANTENER/VENTA signal vocabulary that is specific
+// to this endpoint and distinct from the rest of the contract.
+export const validWatchlistResponse = [
+  { ticker: 'SPY', price: null, technicalScore: null, wsbScore: '9', combinedScore: '9', signal: 'COMPRA' },
+  { ticker: 'AMD', price: '649.42', technicalScore: '8', wsbScore: '9.5', combinedScore: '8.5', signal: 'FUERTE COMPRA' },
+  { ticker: 'MU', price: null, technicalScore: null, wsbScore: '8.5', combinedScore: '8.5', signal: 'COMPRA' },
+  { ticker: 'HTZ', price: null, technicalScore: null, wsbScore: '8.5', combinedScore: '8.5', signal: 'COMPRA' },
+  { ticker: 'WDC', price: null, technicalScore: null, wsbScore: '8.5', combinedScore: '8.5', signal: 'COMPRA' },
+  { ticker: 'MRVL', price: null, technicalScore: null, wsbScore: '8.5', combinedScore: '8.5', signal: 'COMPRA' },
+  { ticker: 'BULL', price: null, technicalScore: null, wsbScore: '8.5', combinedScore: '8.5', signal: 'COMPRA' },
+  { ticker: 'PENG', price: null, technicalScore: null, wsbScore: '8.5', combinedScore: '8.5', signal: 'COMPRA' },
+  { ticker: 'NVDA', price: '239.24', technicalScore: '8', wsbScore: '8.5', combinedScore: '8.1', signal: 'FUERTE COMPRA' },
+  { ticker: 'AAPL', price: '333.63', technicalScore: '8', wsbScore: '8.5', combinedScore: '8.1', signal: 'FUERTE COMPRA' },
+  { ticker: 'SNDK', price: null, technicalScore: null, wsbScore: '8', combinedScore: '8', signal: 'COMPRA' },
+  { ticker: 'AVGO', price: '375.81', technicalScore: '7.5', wsbScore: '8.5', combinedScore: '7.8', signal: 'COMPRA' },
+  { ticker: 'DTE', price: null, technicalScore: null, wsbScore: '7.5', combinedScore: '7.5', signal: 'COMPRA' },
+  { ticker: 'INTC', price: null, technicalScore: null, wsbScore: '7.5', combinedScore: '7.5', signal: 'COMPRA' },
+  { ticker: 'RKLB', price: null, technicalScore: null, wsbScore: '7.5', combinedScore: '7.5', signal: 'COMPRA' },
+  { ticker: 'ABBV', price: '266.69', technicalScore: '8', wsbScore: '5', combinedScore: '7.1', signal: 'COMPRA' },
+  { ticker: 'CVX', price: '207.58', technicalScore: '8', wsbScore: '5', combinedScore: '7.1', signal: 'COMPRA' },
+  { ticker: 'VTI', price: '382.54', technicalScore: '8', wsbScore: '5', combinedScore: '7.1', signal: 'COMPRA' },
+  { ticker: 'VST', price: null, technicalScore: null, wsbScore: '7', combinedScore: '7', signal: 'COMPRA' },
+  { ticker: 'PLTR', price: '192.07', technicalScore: '7', wsbScore: '6.5', combinedScore: '6.9', signal: 'COMPRA' },
+  { ticker: 'QCOM', price: '181.03', technicalScore: '7', wsbScore: '5', combinedScore: '6.4', signal: 'MANTENER' },
+  { ticker: 'META', price: '738.88', technicalScore: '7', wsbScore: '5', combinedScore: '6.4', signal: 'MANTENER' },
+  { ticker: 'CRM', price: '224.99', technicalScore: '7', wsbScore: '5', combinedScore: '6.4', signal: 'MANTENER' },
+  { ticker: 'V', price: '370.64', technicalScore: '7', wsbScore: '5', combinedScore: '6.4', signal: 'MANTENER' },
+  { ticker: 'XOM', price: '164.48', technicalScore: '7', wsbScore: '5', combinedScore: '6.4', signal: 'MANTENER' },
+  { ticker: 'SKM', price: '36.45', technicalScore: '7', wsbScore: '5', combinedScore: '6.4', signal: 'MANTENER' },
+  { ticker: 'NFLX', price: '68.69', technicalScore: '3.5', wsbScore: '6.5', combinedScore: '4.4', signal: 'VENTA' },
+  { ticker: 'LLY', price: '1157.49', technicalScore: '4', wsbScore: '5.5', combinedScore: '4.4', signal: 'VENTA' },
+  { ticker: 'JPM', price: '331.28', technicalScore: '4', wsbScore: '5', combinedScore: '4.3', signal: 'VENTA' },
+  { ticker: 'MA', price: '566.58', technicalScore: '4', wsbScore: '5', combinedScore: '4.3', signal: 'VENTA' },
+  { ticker: 'UNH', price: '376.32', technicalScore: '4', wsbScore: '5', combinedScore: '4.3', signal: 'VENTA' },
+]
+
+// GET /earnings currently returns `[]` live (no earnings events seeded),
+// so "ordered by proximity" cannot be confirmed against the backend and
+// must be proven here. Deliberately NOT in days-remaining order — MSFT
+// (30 days out) comes before AAPL (5 days out) — so a proximity-ordering
+// assertion against this fixture only passes if the view actually sorts;
+// it would pass against a do-nothing implementation if the fixture were
+// already ordered.
+export const earningsNotInProximityOrder = [
+  { ticker: 'MSFT', reportDate: '2026-11-06', daysRemaining: 30, estimatedEps: '3.12', historicalSurprise: '2.4' },
+  { ticker: 'AAPL', reportDate: '2026-10-12', daysRemaining: 5, estimatedEps: '1.85', historicalSurprise: '-1.1' },
+  { ticker: 'NVDA', reportDate: '2026-10-20', daysRemaining: 13, estimatedEps: '0.98', historicalSurprise: '5.6' },
+]
+
 export const validSignalHistoryResponse = [
   { ticker: 'QQQ', snapshotDate: '2026-10-02', scores: { TECHNICAL: '7.0', NEWS: '7.1', ANALYST: '7.5', INSIDER: '7.8', SOCIAL: '7.0', WSB: '7.6' } },
   { ticker: 'QQQ', snapshotDate: '2026-10-03', scores: { TECHNICAL: '7.4', NEWS: '7.3', ANALYST: '7.8', INSIDER: '8.0', SOCIAL: '7.2', WSB: '7.9' } },

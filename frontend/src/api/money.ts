@@ -142,7 +142,7 @@ function roundDecimalParts(integerPart: string, fractionPart: string, decimals: 
  * `*` or `/` ever touches the value — see money-source.test.ts, which
  * reads this module's own source to enforce that.
  */
-function formatDecimalString(value: string, decimals: number, group: boolean): string {
+export function formatDecimalString(value: string, decimals: number, group: boolean): string {
   const { sign, digits } = splitSign(value)
   const dotIndex = digits.indexOf('.')
   const integerPart = dotIndex === -1 ? digits : digits.slice(0, dotIndex)
