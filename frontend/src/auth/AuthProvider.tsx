@@ -51,11 +51,16 @@ export const AuthContext = createContext<AuthContextValue | null>(null)
 /**
  * Owns the auth token as React state, mirrored to sessionStorage for reload
  * survival. Wires the token into the API client's module-level setter, and
- * centralises the one place a 401 from any query is handled: a QueryCache
- * subscription (set up in an effect, not a constructor callback, to avoid
- * closing over stale state without a ref) notices any query settling into
- * an UnauthorizedError and clears the session and routes to /login with a
- * session-expired message. No individual view has to notice a 401 itself.
+ * centralises the one place a 401 is handled, from either a query or a
+ * mutation: subscriptions to both the QueryCache and the MutationCache (set
+ * up in effects, not constructor callbacks, to avoid closing over stale
+ * state without a ref) notice any query or mutation settling into an
+ * UnauthorizedError and clear the session and route to /login with a
+ * session-expired message. This is deliberately one handler covering both
+ * caches rather than two — a mutation that 401s (e.g. submitting a trade
+ * whose session just expired) must end up in the same place as a query
+ * that 401s, or "one place handles a 401" stops being true the moment a
+ * second call site is added.
  *
  * The session-expired message is carried as provider state rather than
  * router navigation state: RequireAuth also redirects to /login on its own
@@ -89,12 +94,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }))
 
   useEffect(() => {
-    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+    // One handler, subscribed to both caches: a 401 clears the session and
+    // routes to /login whether it came from a query or a mutation.
+    const unsubscribeQueries = queryClient.getQueryCache().subscribe((event) => {
       if (event.type === 'updated' && event.action.type === 'error' && event.action.error instanceof UnauthorizedError) {
         logout(SESSION_EXPIRED_MESSAGE)
       }
     })
-    return unsubscribe
+    const unsubscribeMutations = queryClient.getMutationCache().subscribe((event) => {
+      if (event.type === 'updated' && event.action.type === 'error' && event.action.error instanceof UnauthorizedError) {
+        logout(SESSION_EXPIRED_MESSAGE)
+      }
+    })
+    return () => {
+      unsubscribeQueries()
+      unsubscribeMutations()
+    }
   }, [queryClient, logout])
 
   const login = useCallback((token: string, username: string) => {
