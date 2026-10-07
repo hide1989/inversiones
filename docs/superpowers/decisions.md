@@ -143,3 +143,48 @@ with the `withoutData` ones listed as explicitly excluded.
   `BUY`/`HOLD`/`STRONG_SELL` enum used elsewhere in the contract. Render what the API sends; do NOT
   map it into the other vocabulary to make the two views look uniform. If the schema does not
   already accommodate this, report the mismatch rather than widening the schema silently.
+
+## Two latent Criticals in the API layer, found before Task 11 wrote a line
+
+Verified against the running backend. Both are Zod schemas from Task 3 declaring fields as
+`z.string()` that the API genuinely returns as `null`, so the schema REJECTS live responses and the
+view throws instead of rendering.
+
+**1. `frontend/src/api/schemas/fundamentals.ts` — breaks on every ticker.**
+13 metric fields are `z.string()`. Live data:
+- `NU` (a stock, `hasData: true`): `revenueCagr5y`, `epsCagr5y`, `dividendYield` all null.
+- `QQQ` (an ETF, `hasData: true`): **11 of 13 metrics null** — only `beta` and the flags present.
+Fundamentals cannot work for a stock OR a fund as written.
+
+**2. `frontend/src/api/schemas/watchlist.ts` — breaks on 39% of rows.**
+`price` and `technicalScore` are `z.string()`; **12 of 31 live items** return null for both. The
+backend DTO's own Javadoc says "Several fields are frequently absent upstream", so the nulls are
+documented, intended behaviour. The schema is wrong, not the API.
+
+**Ruling: add `.nullable()` to exactly these fields.** This is the *correct* kind of widening —
+making the schema match a documented contract. It is NOT the forbidden kind, which is loosening a
+schema so the UI can stop handling a case the API really does send. The distinction is the test:
+does the API emit this shape? Here, demonstrably yes.
+
+Note which schemas got this right: `returns.ts` has 4 nullable fields and `TotalReturnResponse.java`
+is the other DTO documented as having absent fields. Whoever wrote `returns.ts` read the backend;
+whoever wrote `watchlist.ts` and `fundamentals.ts` did not. `signals.ts`, `portfolio.ts`,
+`diversification.ts` and `earnings.ts` declare zero nullable fields, and I confirmed `/signals` and
+`/portfolio` currently return no nulls — they are fine *today*, which is not the same as correct.
+
+## `hasData: true` does not mean the metrics are there (Task 11)
+
+`QQQ` returns `hasData: true` with 11 of 13 metrics null. So the no-data state cannot be driven by
+the `hasData` flag alone: it must be **per metric**. Rendering a P/E grid for an ETF because
+`hasData` was true produces a grid of blanks — which is exactly the "do not render an empty P/E grid
+for a fund" failure the brief warned about, now confirmed with live data.
+
+## The backend leaks float artifacts into fundamentals strings (Task 11)
+
+Live values include `roe: "30.259999999999998"`, `peg: "0.3662433623319399"`,
+`beta: "0.96430856"` — a double's decimal expansion serialized into the contract's string. The
+frontend must not display these raw; route every fundamentals metric through
+`formatDecimalString` so the user sees `30.26`, not `30.259999999999998`. The frontend must NOT
+"fix" the value by computing on it — formatting a string for display is string truncation, which is
+sanctioned; arithmetic is not. The upstream contamination is a backend finding, recorded here and
+reported to the user, not patched from the browser.
