@@ -158,7 +158,7 @@ That is the brief: **data is the interface, chrome disappears.** The aesthetic i
 
 **Colour.** Near-black ground (`#0A0B0D`), surfaces raised by layered lightness rather than borders. One accent: amber (`#F5A524`) for what is actionable or focused. Green and red are **semantic only**, reserved for the sign of a change, never for decoration, and always paired with `▲`/`▼` and an explicit sign so the meaning survives colour blindness and greyscale printing. Contrast ≥ 4.5:1 for text, verified rather than assumed.
 
-**Density and rhythm.** The signals table carries fifteen columns and must read without horizontal scrolling at 1440px. Row height is tight, padding is minimal, and the eye is guided by alignment rather than rules. Numbers right-align; tickers left-align; nothing centres.
+**Density and rhythm.** The signals table carries ten columns — ticker, six per-source scores, the combined score, the level and the source count — and must read without horizontal scrolling at 1440px. (An earlier draft said fifteen, carried over from the old dashboard's richer table; the API exposes ten and the author confirmed that is enough.) Row height is tight, padding is minimal, and the eye is guided by alignment rather than rules. Numbers right-align; tickers left-align; nothing centres.
 
 **Score bars, not badges.** A combined score renders as a short inline bar plus the number — comparable down a column at a glance, which a coloured pill is not.
 
@@ -206,6 +206,7 @@ frontend/
 | 10 | Diversification | Ceilings, weights, violations |
 | 11 | AI synthesis, Earnings, Watchlist, Fundamentals | The four read-only views |
 | 12 | Playwright and accessibility | Seven flows, zero axe violations |
+| 13 | Force a signal refresh | A POST endpoint and a button, so the table can be populated on demand |
 
 ---
 
@@ -518,6 +519,41 @@ Four read-only views, lower density, more prose.
 - [ ] Write the specs, run them, implement any missing `data-testid` hooks, verify, commit.
 
 ---
+
+### Task 13: Force a signal refresh from the view
+
+**Why this exists.** The author asked for it after seeing the live data: the scheduled refresh runs at
+10:15 Bogotá on weekdays, so after a backend restart or an n8n outage the signals table honestly reports
+twenty tickers with no data until the next weekday morning. Waiting a day to see the view populated is
+not a reasonable development or demonstration loop, and the usefulness outlives the demo — a refresh
+that failed at 10:15 currently cannot be retried until 10:15 tomorrow.
+
+**This task spans both sides.** The backend has no endpoint that triggers the refresh; `@Scheduled` is
+the only caller. So:
+
+**Backend** (`:api-rest` and `:app-service`, following every convention Plan 2 established):
+- `POST /api/v1/signals/refresh`, authenticated like everything except login, invoking
+  `RefreshSignalSnapshotUseCase` and returning the number of snapshots stored — the use case already
+  returns that count.
+- It must not duplicate the overlap guard. `SignalSnapshotSchedulerConfig` holds an `AtomicBoolean` that
+  stops two scheduled runs overlapping; a manual trigger firing while a scheduled run is in flight is
+  the same hazard, so the guard must cover both callers rather than being copied. Where that guard
+  belongs after this change is a judgement call — report it rather than deciding silently.
+- A `@SpringBootTest` + MockMvc test: the endpoint requires a token, returns the count, and a second
+  call while one is in flight is refused rather than running concurrently.
+- The acceptance suite's existing scenarios must still pass.
+
+**Frontend** (the `/senales` view):
+- A refresh control using the design system's `Button`, disabled while in flight, announcing its result.
+- On success, invalidate the signals query so the table repopulates — and nothing else, since a refresh
+  changes signals only.
+- On failure, render the server's `ProblemDetail` like every other error in this application.
+- UI copy in Spanish.
+- Tests: the control fires the mutation, the table repopulates from the invalidated query, a failure
+  renders the server's message, and the control is disabled while in flight.
+
+**Out of scope:** any change to the cron, the zone, or the scheduled job's behaviour. This adds a second
+caller to an existing use case; it does not alter when the first one runs.
 
 ## Definition of Done
 
