@@ -1,0 +1,8 @@
+import { http, HttpResponse } from 'msw'
+import { validPortfolioResponse } from './fixtures'
+
+const API_BASE = 'http://localhost:8080/api/v1'
+
+export const handlers = [
+  http.get(`${API_BASE}/portfolio`, () => HttpResponse.json(validPortfolioResponse)),
+]
