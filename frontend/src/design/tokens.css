@@ -62,4 +62,18 @@
   --spacing-cell-x: 0.5rem; /* 8px horizontal cell padding, tight tables */
   --spacing-row-y: 0.25rem; /* 4px vertical row padding, tight tables */
   --spacing-gutter: 1rem; /* 16px panel gutter */
+
+  /*
+   * ---- colour & motion: shared states (loading, error, empty) -----------
+   *
+   * Task 5. These are fixed tones, deliberately not borrowed from the
+   * surface-1/2/3 elevation ladder: a skeleton or an error panel can be
+   * nested inside a Surface at any level, and a block coloured relative to
+   * its *own* elevation would blend into whatever container it happens to
+   * sit in. A loading placeholder and an error panel need to read the same
+   * way everywhere, so they get their own tones instead.
+   */
+  --color-skeleton-base: #1d2029; /* placeholder block: neither ground nor any surface level */
+  --color-skeleton-highlight: #2b2f3a; /* the shimmer sweep across the block */
+  --motion-shimmer-duration: 1.8s; /* the loading skeleton's sweep; removed under reduced motion */
 }

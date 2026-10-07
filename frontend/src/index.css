@@ -79,9 +79,40 @@ body {
   animation-delay: calc(var(--reveal-index, 0) * 28ms);
 }
 
+/*
+ * Loading skeleton: a shimmer sweeping across a fixed-tone block, never a
+ * spinner. `--motion-shimmer-duration` lives in tokens.css; the sweep is
+ * removed entirely under reduced motion, leaving a static placeholder.
+ */
+@keyframes shimmer {
+  0% {
+    background-position: -150% 0;
+  }
+  100% {
+    background-position: 150% 0;
+  }
+}
+
+.skeleton-row {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-skeleton-base) 25%,
+    var(--color-skeleton-highlight) 50%,
+    var(--color-skeleton-base) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer var(--motion-shimmer-duration) ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reveal-row {
     animation: none;
+  }
+
+  .skeleton-row {
+    animation: none;
+    background-image: none;
+    background-color: var(--color-skeleton-base);
   }
 
   * {
