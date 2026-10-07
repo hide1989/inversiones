@@ -1,8 +1,9 @@
-import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { setAuthToken } from '../api/client'
 import { UnauthorizedError } from '../api/problem'
+import { loginMutationKey } from '../api/queries/auth'
 
 /** sessionStorage, never localStorage: the token must not outlive the tab. */
 export const AUTH_STORAGE_KEY = 'inversiones.auth'
@@ -37,6 +38,14 @@ function readStoredSession(): StoredSession | null {
   return null
 }
 
+/** True when a mutation's key matches the login mutation's own key. */
+function isLoginMutation(mutationKey: ReadonlyArray<unknown> | undefined): boolean {
+  if (mutationKey === undefined || mutationKey.length !== loginMutationKey.length) {
+    return false
+  }
+  return mutationKey.every((part, index) => part === loginMutationKey[index])
+}
+
 export interface AuthContextValue {
   username: string | null
   isAuthenticated: boolean
@@ -53,14 +62,20 @@ export const AuthContext = createContext<AuthContextValue | null>(null)
  * survival. Wires the token into the API client's module-level setter, and
  * centralises the one place a 401 is handled, from either a query or a
  * mutation: subscriptions to both the QueryCache and the MutationCache (set
- * up in effects, not constructor callbacks, to avoid closing over stale
- * state without a ref) notice any query or mutation settling into an
- * UnauthorizedError and clear the session and route to /login with a
- * session-expired message. This is deliberately one handler covering both
- * caches rather than two — a mutation that 401s (e.g. submitting a trade
- * whose session just expired) must end up in the same place as a query
- * that 401s, or "one place handles a 401" stops being true the moment a
- * second call site is added.
+ * up in an effect, not a constructor callback, to avoid closing over stale
+ * state without a ref) share one handler that notices a query or mutation
+ * settling into an UnauthorizedError and clears the session and routes to
+ * /login with a session-expired message. No individual view has to notice
+ * a 401 itself.
+ *
+ * One mutation is deliberately exempt: the login mutation itself. A wrong
+ * password is a 401 from a request that was never authenticated — it is
+ * not a session expiring mid-use — so it must not clear a (non-existent)
+ * session or show the session-expired message next to the login form's
+ * own error. It is excluded by `mutationKey`, checked explicitly in the
+ * mutation subscription, rather than by inspecting the URL or the error:
+ * a key-based exclusion is visible at both ends (see `loginMutationKey`
+ * in `api/queries/auth.ts`) to the next person reading either side.
  *
  * The session-expired message is carried as provider state rather than
  * router navigation state: RequireAuth also redirects to /login on its own
@@ -72,6 +87,15 @@ export const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
+
+  // Read through a ref, updated in an effect (never during render — that
+  // trips react-hooks/refs), so `logout`'s identity stays stable across
+  // navigations instead of churning the cache subscriptions below on
+  // every route change.
+  const locationRef = useRef(location)
+  useEffect(() => {
+    locationRef.current = location
+  }, [location])
 
   const [session, setSession] = useState<StoredSession | null>(() => readStoredSession())
   const [sessionMessage, setSessionMessage] = useState<string | null>(null)
@@ -85,32 +109,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem(AUTH_STORAGE_KEY)
       setSession(null)
       setSessionMessage(message ?? null)
-      const from = `${location.pathname}${location.search}`
+      const from = `${locationRef.current.pathname}${locationRef.current.search}`
       navigate('/login', { replace: true, state: { from } })
     },
-    [navigate, location],
+    [navigate],
   )
 
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }))
 
-  useEffect(() => {
-    // One handler, subscribed to both caches: a 401 clears the session and
-    // routes to /login whether it came from a query or a mutation.
-    const unsubscribeQueries = queryClient.getQueryCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error' && event.action.error instanceof UnauthorizedError) {
+  // Shared by both subscriptions below, so the "is this an UnauthorizedError"
+  // check and the resulting action can't drift apart between the two caches.
+  const handleUnauthorizedError = useCallback(
+    (error: unknown) => {
+      if (error instanceof UnauthorizedError) {
         logout(SESSION_EXPIRED_MESSAGE)
+      }
+    },
+    [logout],
+  )
+
+  useEffect(() => {
+    const unsubscribeQueries = queryClient.getQueryCache().subscribe((event) => {
+      if (event.type === 'updated' && event.action.type === 'error') {
+        handleUnauthorizedError(event.action.error)
       }
     })
     const unsubscribeMutations = queryClient.getMutationCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error' && event.action.error instanceof UnauthorizedError) {
-        logout(SESSION_EXPIRED_MESSAGE)
+      if (event.type === 'updated' && event.action.type === 'error' && !isLoginMutation(event.mutation.options.mutationKey)) {
+        handleUnauthorizedError(event.action.error)
       }
     })
     return () => {
       unsubscribeQueries()
       unsubscribeMutations()
     }
-  }, [queryClient, logout])
+  }, [queryClient, handleUnauthorizedError])
 
   const login = useCallback((token: string, username: string) => {
     sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token, username }))

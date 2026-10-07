@@ -48,9 +48,13 @@ function renderApp(initialPath: string) {
   )
 }
 
-async function submitLoginForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText('Usuario'), 'david')
-  await user.type(screen.getByLabelText('Contraseña'), 'Inversiones2026!')
+async function submitLoginForm(user: ReturnType<typeof userEvent.setup>, password = 'Inversiones2026!') {
+  const usernameField = screen.getByLabelText('Usuario')
+  const passwordField = screen.getByLabelText('Contraseña')
+  await user.clear(usernameField)
+  await user.type(usernameField, 'david')
+  await user.clear(passwordField)
+  await user.type(passwordField, password)
   await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
 }
 
@@ -99,5 +103,60 @@ describe('a failed login', () => {
     expect(screen.queryByText('Portfolio content')).not.toBeInTheDocument()
     expect(localStorage.length).toBe(0)
     expect(sessionStorage.length).toBe(0)
+  })
+
+  it('does not also show the session-expired message: a wrong password is not a mid-session logout', async () => {
+    server.use(
+      http.post(`${API_BASE}/auth/login`, () =>
+        HttpResponse.json(invalidLoginProblem, {
+          status: 401,
+          headers: { 'Content-Type': 'application/problem+json' },
+        }),
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderApp('/login')
+
+    await user.type(screen.getByLabelText('Usuario'), 'david')
+    await user.type(screen.getByLabelText('Contraseña'), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+
+    await screen.findByRole('alert')
+    // The session-expired banner is rendered with role="status"; a failed
+    // login must never trigger it alongside the login form's own error.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByText(/sesión expiró/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('a failed login followed by a successful one', () => {
+  it('reaches the originally attempted path, not the default route', async () => {
+    server.use(
+      http.post(
+        `${API_BASE}/auth/login`,
+        () =>
+          HttpResponse.json(invalidLoginProblem, {
+            status: 401,
+            headers: { 'Content-Type': 'application/problem+json' },
+          }),
+        { once: true },
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderApp('/protected')
+
+    // First attempt fails (the overridden handler above answers once)...
+    await submitLoginForm(user, 'wrong-password')
+    await screen.findByRole('alert')
+
+    // ...and the retry, now hitting the default success handler, must
+    // still land on /protected — not on "/" — because the failed attempt
+    // must not have corrupted the remembered "from" path.
+    await submitLoginForm(user)
+
+    await waitFor(() => expect(screen.getByText('Portfolio content')).toBeInTheDocument())
+    expect(screen.queryByText('Home default')).not.toBeInTheDocument()
   })
 })
