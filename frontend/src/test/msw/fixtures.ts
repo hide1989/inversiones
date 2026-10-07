@@ -241,6 +241,50 @@ export const validSignalsScoredResponse = {
   tickersWithoutData: ['GLD'],
 }
 
+// Captured verbatim from the running backend's GET /diversification (see
+// .superpowers/sdd/2026-10-06-frontend-spa/task-10-report.md): the live
+// portfolio is currently compliant with zero violations, so this is the
+// only shape a live capture can prove — the violation-rendering tests
+// build their own fixture on top of this one.
+export const validDiversificationResponse = {
+  violations: [],
+  totalMarketValue: { amount: '4340.6991515628', currency: 'USD' },
+  weightByTicker: {
+    TERPEL: '3.4417',
+    SMH: '7.7257',
+    NU: '4.8579',
+    TTWO: '4.8471',
+    TSLA: '2.0155',
+    JPM: '1.1565',
+    QQQ: '10.8854',
+    MINEROS: '4.0537',
+    GOOGL: '5.0849',
+    IBIT: '2.9395',
+    NLR: '1.0456',
+    AMZN: '10.0455',
+    PLTR: '0.7446',
+    MSFT: '3.5952',
+    EC: '19.1559',
+    VOO: '5.1539',
+    GLD: '2.0760',
+    TSM: '6.3886',
+    UNH: '1.0353',
+    SPCX: '3.7515',
+  },
+  weightBySector: {
+    Materials: '6.1297',
+    'Consumer Discretionary': '12.0610',
+    Industrials: '3.7515',
+    'Health Care': '1.0353',
+    'Broad Market': '18.9789',
+    Financials: '6.0144',
+    'Communication Services': '9.9320',
+    Energy: '23.6432',
+    Technology: '18.4541',
+  },
+  compliant: true,
+}
+
 // A derived daily history for QQQ — the real `/signals/history` capture
 // for this exact ticker/range was an empty array (no snapshot persisted
 // yet), so this invents five consecutive trading days trending toward

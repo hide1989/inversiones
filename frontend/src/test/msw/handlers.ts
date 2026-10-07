@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import {
   emptySignalHistoryResponse,
+  validDiversificationResponse,
   validLoginResponse,
   validPortfolioResponse,
   validSignalsNoDataResponse,
@@ -15,4 +16,5 @@ export const handlers = [
   http.post(`${API_BASE}/auth/login`, () => HttpResponse.json(validLoginResponse)),
   http.get(`${API_BASE}/signals`, () => HttpResponse.json(validSignalsNoDataResponse)),
   http.get(`${API_BASE}/signals/history`, () => HttpResponse.json(emptySignalHistoryResponse)),
+  http.get(`${API_BASE}/diversification`, () => HttpResponse.json(validDiversificationResponse)),
 ]
