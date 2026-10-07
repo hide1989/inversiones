@@ -7,6 +7,7 @@ import { magnitudeOf, signOf } from '../api/decimalSign'
 import { Delta, Figure, Surface, Tag } from '../design/primitives'
 import { DataTable, type DataTableColumn, type DataTableSort } from '../components/table'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
+import { TotalReturnPanel } from './TotalReturnPanel'
 import type { PortfolioResponse, Position } from '../api/schemas/portfolio'
 
 // Only numeric columns are sortable — ticker and broker are identity, not
@@ -307,6 +308,7 @@ export function Posiciones() {
         onSortChange={handleSortChange}
         emptyMessage="No hay posiciones en pesos."
       />
+      <TotalReturnPanel />
     </div>
   )
 }
