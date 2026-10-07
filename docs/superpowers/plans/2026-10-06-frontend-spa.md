@@ -6,7 +6,16 @@
 
 **Architecture:** Vite builds a static bundle — no Node runtime in production, which is what makes Vercel viable in Plan 4. TanStack Query owns server state; there is no client-side store duplicating it. Zod validates every response at the boundary, so a backend contract change fails loudly in one place instead of producing `undefined` three components deep. No business arithmetic happens in the browser: the backend computes every total, and the frontend formats.
 
-**Tech Stack:** Vite 6, React 19, TypeScript strict, Tailwind CSS 4, TanStack Query 5, React Router 7, Zod 3, Recharts 2, Vitest + React Testing Library + MSW, Playwright + axe.
+**Tech Stack, as actually resolved in Task 1** — not as this plan first guessed:
+React **19.2**, Vite **8.3**, Tailwind CSS **4.3**, TanStack Query **5.104**, Zod **4.6**,
+Vitest **5.0**, Playwright **1.63**, ESLint **9** (pinned: `eslint-plugin-jsx-a11y` does not support 10),
+React Router 7, Recharts 2, React Testing Library, MSW.
+
+Two of this plan's original guesses were wrong and are corrected above: it said Vite 6 and **Zod 3**.
+Zod resolving to **4** matters for later tasks — Zod 4 renamed error customization (`message` → `error`),
+changed `z.string().datetime()` in favour of `z.iso.datetime()`, and altered default `.strict()`
+behaviour. **Write Zod 4, not Zod 3.** If a Zod example from training or a web guide uses `message:`,
+it is Zod 3 and will not behave as expected.
 
 **Spec:** `spec.md` sections 5 and 6.3.
 **Predecessors:** Plan 1 (domain core, 12 tasks) and Plan 2 (infrastructure and API, 12 tasks) are complete: 283 unit tests, 11 acceptance scenarios, merged coverage 96.5%.
