@@ -226,3 +226,42 @@ MSFT"` — English text in a Spanish UI. **Ruling: a Spanish sentence frames the
 server's `detail` is still shown beneath it.** Dropping the detail discards information the user may
 need; showing it alone leaks an English internal string as the whole message. Framing keeps both,
 and does not interpret the server's meaning.
+
+## CORRECTION: the fundamentals 404s were my own circuit breaker, not a data gap
+
+I earlier recorded that `GET /fundamentals/{ticker}` 404s for 14 of 17 holdings and framed it as a
+gap in the instrument registry. **That was wrong, and I caused it.** The backend logs show:
+
+```
+FundamentalsProviderAdapter : n8n call to /analizar-empresa failed, degrading to no data:
+CallNotPermittedException: CircuitBreaker 'analizar-empresa' is OPEN
+```
+
+My own rapid loops over all seventeen tickers — twice — tripped the breaker. That is why the set of
+resolving tickers kept changing between runs (MSFT resolved, then 404'd; NU and QQQ the reverse): I
+was watching a breaker open, half-open probe, and re-open, and reading it as a static data gap.
+Sampling misled me a third time, in the same session I wrote a rule against sampling.
+
+One thing it does prove: the Resilience4j annotations are genuinely live. Plan 2 found a missing
+`aspectjweaver` that had silently made every one of them a no-op; this is that fix working.
+
+## A real defect it exposed: a degraded upstream is reported as a non-existent ticker
+
+The chain:
+1. `FundamentalsProviderAdapter:45` — `N8nSafeCall.safely` swallows the breaker-open exception and
+   returns `Optional.empty()`.
+2. `MarketController:68` — `.orElseThrow(() -> new UnresolvedTickerException(parsed))`.
+3. The client receives **HTTP 404 "Could not resolve ticker: MSFT"**.
+
+So **"the upstream is down" and "this ticker does not exist" collapse into one message that names
+the wrong cause.** A user reads that MSFT is not a valid ticker. The honest answer is 503 with a
+retry hint, reserving 404 for a ticker that genuinely does not resolve.
+
+This is the same defect family as `priced: false` conflating "no quote" with "no exchange rate"
+(recorded at the end of Plan 2), and as the zero that means "absent" rendered as a zero that means
+"measured". The pattern across all of them: **the system discards which of two different things it
+knows, and the UI then asserts the wrong one.** Recorded for the final branch review as a backend
+finding; not Task 12's to fix.
+
+A UI consequence worth naming: fundamentals is a per-ticker on-demand panel, so opening several
+tickers in a row — the natural way to use it — is exactly the access pattern that trips the breaker.
