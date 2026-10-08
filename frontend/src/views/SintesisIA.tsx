@@ -1,6 +1,6 @@
 import { useAiSynthesis } from '../api/queries/aiSynthesis'
 import { formatScore } from '../api/money'
-import { Surface, Tag } from '../design/primitives'
+import { NoDataCell, Surface, Tag } from '../design/primitives'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
 import type { AiSynthesisItem, AiSynthesisResponse } from '../api/schemas/aiSynthesis'
 
@@ -71,7 +71,24 @@ function TagList({ label, items }: { label: string; items: ReadonlyArray<string>
 }
 
 /**
- * One ticker's card. The summary is prose — the one place in this view
+ * `iaScore`, `signal`, `conviction`, `horizon` and `summary` are all
+ * unguarded on the wire (`AiSynthesis` leaves them nullable in the Java
+ * model — the same class of defect as `estimatedEps` in `EarningsEvent`)
+ * — each gets its own no-data treatment rather than one `hasData` flag
+ * deciding the whole card, because a card already in `withData` is not
+ * a guarantee every one of its five fields came back populated.
+ */
+function ScoreFigure({ iaScore }: { iaScore: string | null }) {
+  if (iaScore === null) return <NoDataCell />
+  return <span className="font-mono text-xl tabular-nums text-fg">{formatScore(iaScore)}</span>
+}
+
+function SignalTag({ signal }: { signal: string | null }) {
+  if (signal === null) return <Tag label="Sin dato" tone="accent" />
+  return <Tag label={signal} tone={SIGNAL_TONE[signal] ?? 'neutral'} />
+}
+
+/** One ticker's card. The summary is prose — the one place in this view
  * where `font-sans` (IBM Plex Sans) carries a paragraph rather than a
  * label, since every other figure here is `font-mono`.
  */
@@ -81,16 +98,20 @@ function SynthesisCard({ item }: { item: AiSynthesisItem }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="font-mono text-base font-semibold text-fg">{item.ticker}</span>
-          <Tag label={item.signal} tone={SIGNAL_TONE[item.signal] ?? 'neutral'} />
+          <SignalTag signal={item.signal} />
         </div>
-        <span className="font-mono text-xl tabular-nums text-fg">{formatScore(item.iaScore)}</span>
+        <ScoreFigure iaScore={item.iaScore} />
       </div>
       <div className="flex flex-wrap gap-2">
-        <Tag label={`Convicción: ${item.conviction}`} />
-        <Tag label={`Horizonte: ${item.horizon}`} />
+        <Tag label={`Convicción: ${item.conviction ?? 'Sin dato'}`} />
+        <Tag label={`Horizonte: ${item.horizon ?? 'Sin dato'}`} />
         <span className="font-mono text-xs text-fg-subtle">{item.snapshotDate}</span>
       </div>
-      <p className="font-sans text-sm leading-relaxed text-fg">{item.summary}</p>
+      {item.summary === null ? (
+        <p className="font-sans text-sm leading-relaxed text-fg-subtle">Sin resumen disponible.</p>
+      ) : (
+        <p className="font-sans text-sm leading-relaxed text-fg">{item.summary}</p>
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <TagList label="Catalizadores" items={item.catalysts} />
         <TagList label="Riesgos" items={item.risks} />

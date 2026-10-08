@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useEarnings } from '../api/queries/earnings'
 import { formatDecimalString } from '../api/money'
 import { compareDecimalStrings } from '../api/decimalCompare'
+import { NoDataCell } from '../design/primitives'
 import { DataTable, type DataTableColumn, type DataTableSort } from '../components/table'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
 import type { EarningsEvent } from '../api/schemas/earnings'
@@ -11,9 +12,18 @@ import type { EarningsEvent } from '../api/schemas/earnings'
  * currency attached, so `formatDecimalString` (not `formatMoney`, which
  * requires a `Money` object) fixes their width without any numeric
  * coercion — the same primitive `formatPercent`/`formatScore` build on.
+ * Both fields are nullable on the wire (an unguarded `BigDecimal` in
+ * `EarningsEvent`, same as every other decimal field `DecimalStrings.of`
+ * can emit as null) — a null renders as `NoDataCell`, never coerced into
+ * a displayable string.
  */
 function formatMetric(value: string): string {
   return formatDecimalString(value, 2, false)
+}
+
+function MetricCell({ value }: { value: string | null }) {
+  if (value === null) return <NoDataCell />
+  return <span className="block w-full text-right font-mono tabular-nums text-fg">{formatMetric(value)}</span>
 }
 
 /**
@@ -22,16 +32,36 @@ function formatMetric(value: string): string {
  * two of them directly is comparing integers the API already gave us as
  * numbers, never a coercion of a string the money.ts rule exists to
  * guard against.
+ *
+ * `estimatedEps` and `historicalSurprise` can be null, and a real EPS or
+ * surprise value can legitimately be negative, so there is no safe
+ * sentinel string to substitute (unlike Watchlist's scores, which are
+ * never negative). A null instead sorts last unconditionally — not
+ * flipped by `direction` — so it reads as "no data" parked at the end of
+ * the table regardless of which way the column is sorted.
  */
+function compareNullableDecimal(a: string | null, b: string | null, direction: 'asc' | 'desc'): number {
+  if (a === null && b === null) return 0
+  if (a === null) return 1
+  if (b === null) return -1
+  const comparison = compareDecimalStrings(a, b)
+  return direction === 'desc' ? -comparison : comparison
+}
+
 function sortEarnings(events: ReadonlyArray<EarningsEvent>, sort: DataTableSort | null): EarningsEvent[] {
   if (sort === null) return [...events]
-  const sorted = [...events].sort((a, b) => {
-    if (sort.key === 'daysRemaining') return a.daysRemaining - b.daysRemaining
-    if (sort.key === 'estimatedEps') return compareDecimalStrings(a.estimatedEps, b.estimatedEps)
-    if (sort.key === 'historicalSurprise') return compareDecimalStrings(a.historicalSurprise, b.historicalSurprise)
+  const direction = sort.direction
+  return [...events].sort((a, b) => {
+    if (sort.key === 'daysRemaining') {
+      const comparison = a.daysRemaining - b.daysRemaining
+      return direction === 'desc' ? -comparison : comparison
+    }
+    if (sort.key === 'estimatedEps') return compareNullableDecimal(a.estimatedEps, b.estimatedEps, direction)
+    if (sort.key === 'historicalSurprise') {
+      return compareNullableDecimal(a.historicalSurprise, b.historicalSurprise, direction)
+    }
     return 0
   })
-  return sort.direction === 'desc' ? sorted.reverse() : sorted
 }
 
 function buildColumns(): DataTableColumn<EarningsEvent>[] {
@@ -64,22 +94,14 @@ function buildColumns(): DataTableColumn<EarningsEvent>[] {
       header: 'EPS estimado',
       sortable: true,
       width: '7rem',
-      render: (event) => (
-        <span className="block w-full text-right font-mono tabular-nums text-fg">
-          {formatMetric(event.estimatedEps)}
-        </span>
-      ),
+      render: (event) => <MetricCell value={event.estimatedEps} />,
     },
     {
       key: 'historicalSurprise',
       header: 'Sorpresa histórica',
       sortable: true,
       width: '8rem',
-      render: (event) => (
-        <span className="block w-full text-right font-mono tabular-nums text-fg">
-          {formatMetric(event.historicalSurprise)}
-        </span>
-      ),
+      render: (event) => <MetricCell value={event.historicalSurprise} />,
     },
   ]
 }

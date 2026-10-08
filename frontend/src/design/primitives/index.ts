@@ -18,3 +18,6 @@ export type { ButtonProps, ButtonVariant } from './Button'
 
 export { Field } from './Field'
 export type { FieldProps } from './Field'
+
+export { NoDataCell } from './NoDataCell'
+export type { NoDataCellProps } from './NoDataCell'

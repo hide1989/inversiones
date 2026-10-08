@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import { server } from '../../test/msw/server'
-import { earningsNotInProximityOrder } from '../../test/msw/fixtures'
+import { earningsNotInProximityOrder, earningsWithNullMetrics } from '../../test/msw/fixtures'
 import { Earnings } from '../Earnings'
 
 const API_BASE = 'http://localhost:8080/api/v1'
@@ -55,5 +55,31 @@ describe('proximity ordering', () => {
     expect(within(aaplRow).getByText('5')).toBeInTheDocument()
     expect(within(aaplRow).getByText('1.85')).toBeInTheDocument()
     expect(within(aaplRow).getByText('-1.10')).toBeInTheDocument()
+  })
+})
+
+describe('a null estimatedEps or historicalSurprise (Critical 1: both are unguarded BigDecimal on the wire)', () => {
+  it('renders the whole route instead of an ErrorState, with a no-data cell per null field', async () => {
+    // Before the fix, estimatedEps/historicalSurprise were z.string() —
+    // Zod rejected this exact shape and the route rendered ErrorState
+    // for every row, not just the null cell. A fixture with a real null
+    // in each field (not the same row) is the only way to prove both
+    // fields independently survive validation.
+    mockEarnings(earningsWithNullMetrics)
+    renderView()
+
+    const msftRow = await screen.findByTestId('earnings-row-MSFT')
+    const aaplRow = await screen.findByTestId('earnings-row-AAPL')
+
+    // MSFT: null estimatedEps, real historicalSurprise.
+    expect(within(msftRow).getByText('2.40')).toBeInTheDocument()
+    expect(within(msftRow).getByText('Sin dato')).toBeInTheDocument()
+
+    // AAPL: real estimatedEps, null historicalSurprise.
+    expect(within(aaplRow).getByText('1.85')).toBeInTheDocument()
+    expect(within(aaplRow).getByText('Sin dato')).toBeInTheDocument()
+
+    // Neither row renders the literal string "null".
+    expect(document.body.textContent ?? '').not.toContain('null')
   })
 })

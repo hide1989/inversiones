@@ -5,8 +5,8 @@ export const EarningsEventSchema = z.object({
   ticker: z.string(),
   reportDate: z.iso.date(),
   daysRemaining: z.number(),
-  estimatedEps: z.string(),
-  historicalSurprise: z.string(),
+  estimatedEps: z.string().nullable(),
+  historicalSurprise: z.string().nullable(),
 })
 
 export type EarningsEvent = z.infer<typeof EarningsEventSchema>

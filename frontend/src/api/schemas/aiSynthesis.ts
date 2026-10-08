@@ -4,11 +4,11 @@ import { z } from 'zod'
 export const AiSynthesisItemSchema = z.object({
   ticker: z.string(),
   snapshotDate: z.iso.date(),
-  iaScore: z.string(),
-  signal: z.string(),
-  conviction: z.string(),
-  horizon: z.string(),
-  summary: z.string(),
+  iaScore: z.string().nullable(),
+  signal: z.string().nullable(),
+  conviction: z.string().nullable(),
+  horizon: z.string().nullable(),
+  summary: z.string().nullable(),
   catalysts: z.array(z.string()),
   risks: z.array(z.string()),
 })

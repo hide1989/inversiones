@@ -341,6 +341,43 @@ export const validAiSynthesisWithDataResponse = {
   averageScore: '7.80',
 }
 
+// Final review Critical 2: AiSynthesis guards only ticker and
+// snapshotDate; iaScore, signal, conviction, horizon and summary are all
+// unguarded BigDecimal/String fields that DecimalStrings.of / a bare
+// pass-through can emit as JSON null. This entry puts a null in EACH of
+// the five fields across two withData rows (never the same row twice),
+// so each field's no-data path is independently exercised — a schema
+// without .nullable() on all five would reject this whole response, the
+// same way earnings.ts did.
+export const validAiSynthesisWithNullFieldsResponse = {
+  withData: [
+    {
+      ticker: 'AAPL',
+      snapshotDate: '2026-10-06',
+      iaScore: null,
+      signal: 'BUY',
+      conviction: null,
+      horizon: 'MEDIUM_TERM',
+      summary: 'El impulso en servicios sostiene una tesis constructiva.',
+      catalysts: [],
+      risks: [],
+    },
+    {
+      ticker: 'MSFT',
+      snapshotDate: '2026-10-06',
+      iaScore: '7.40',
+      signal: null,
+      conviction: 'MEDIUM',
+      horizon: null,
+      summary: null,
+      catalysts: [],
+      risks: [],
+    },
+  ],
+  withoutData: [],
+  averageScore: '7.40',
+}
+
 // Captured verbatim from the running backend's GET /fundamentals/NU: a
 // stock (isEtf: false) with hasData: true but three metrics null, plus
 // float-artifact decimal strings (roe, peg, beta) the view must route
@@ -464,6 +501,18 @@ export const earningsNotInProximityOrder = [
   { ticker: 'MSFT', reportDate: '2026-11-06', daysRemaining: 30, estimatedEps: '3.12', historicalSurprise: '2.4' },
   { ticker: 'AAPL', reportDate: '2026-10-12', daysRemaining: 5, estimatedEps: '1.85', historicalSurprise: '-1.1' },
   { ticker: 'NVDA', reportDate: '2026-10-20', daysRemaining: 13, estimatedEps: '0.98', historicalSurprise: '5.6' },
+]
+
+// Final review Critical 1: EarningsEvent's estimatedEps and
+// historicalSurprise are unguarded BigDecimal fields in the Java model —
+// DecimalStrings.of(null) emits a JSON null for either whenever n8n's
+// proximo_reporte is set but eps_estimado or sorpresa_promedio_pct is
+// absent. This fixture puts a null in EACH field (not the same row, so
+// both code paths are independently exercised) to prove the view renders
+// a no-data cell per field instead of rejecting the whole array.
+export const earningsWithNullMetrics = [
+  { ticker: 'MSFT', reportDate: '2026-11-06', daysRemaining: 30, estimatedEps: null, historicalSurprise: '2.4' },
+  { ticker: 'AAPL', reportDate: '2026-10-12', daysRemaining: 5, estimatedEps: '1.85', historicalSurprise: null },
 ]
 
 export const validSignalHistoryResponse = [

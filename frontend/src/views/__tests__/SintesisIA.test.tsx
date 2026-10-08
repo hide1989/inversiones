@@ -3,7 +3,11 @@ import { http, HttpResponse } from 'msw'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import { server } from '../../test/msw/server'
-import { validAiSynthesisEmptyResponse, validAiSynthesisWithDataResponse } from '../../test/msw/fixtures'
+import {
+  validAiSynthesisEmptyResponse,
+  validAiSynthesisWithDataResponse,
+  validAiSynthesisWithNullFieldsResponse,
+} from '../../test/msw/fixtures'
 import { SintesisIA } from '../SintesisIA'
 
 const API_BASE = 'http://localhost:8080/api/v1'
@@ -69,5 +73,29 @@ describe('a response with some scored tickers', () => {
     expect(screen.getByText('7.8')).toBeInTheDocument()
     expect(screen.getByText(/2 tickers con datos/i)).toBeInTheDocument()
     expect(screen.getByText(/excluye 3 tickers sin datos: amzn, gld, nu/i)).toBeInTheDocument()
+  })
+})
+
+describe('a null iaScore, signal, conviction, horizon or summary (Critical 2: all five are unguarded on the wire)', () => {
+  it('renders every card instead of ErrorState, with a no-data treatment per null field', async () => {
+    mockAiSynthesis(validAiSynthesisWithNullFieldsResponse)
+    renderView()
+
+    const aaplCard = await screen.findByTestId('synthesis-card-AAPL')
+    const msftCard = await screen.findByTestId('synthesis-card-MSFT')
+
+    // AAPL: null iaScore and conviction, real signal/horizon/summary.
+    expect(within(aaplCard).getByText('Sin dato')).toBeInTheDocument()
+    expect(within(aaplCard).getByText('BUY')).toBeInTheDocument()
+    expect(within(aaplCard).getByText(/Convicción: Sin dato/)).toBeInTheDocument()
+    expect(within(aaplCard).getByText(/Horizonte: MEDIUM_TERM/)).toBeInTheDocument()
+
+    // MSFT: null signal, horizon and summary, real iaScore/conviction.
+    expect(within(msftCard).getByText('7.4')).toBeInTheDocument()
+    expect(within(msftCard).getByText(/Convicción: MEDIUM/)).toBeInTheDocument()
+    expect(within(msftCard).getByText(/Horizonte: Sin dato/)).toBeInTheDocument()
+    expect(within(msftCard).getByText(/Sin resumen disponible/)).toBeInTheDocument()
+
+    expect(document.body.textContent ?? '').not.toContain('null')
   })
 })
