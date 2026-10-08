@@ -297,6 +297,58 @@ describe('creating a transaction', () => {
     expect(within(form).getByLabelText('Precio unitario')).toHaveAttribute('type', 'text')
     expect(within(form).getByLabelText('Comisiones')).toHaveAttribute('type', 'text')
   })
+
+  // Final review Important 4: before this fix, submitting an empty form left
+  // focus on Guardar with a grey line of text that read as help, and a
+  // screen reader announced nothing — the client-side validation errors
+  // never set aria-invalid, never used role="alert", and were never
+  // distinguishable from hint="Opcional" on the fees field.
+  it('marks every invalid field aria-invalid, announces each error via role="alert", and moves focus to the first invalid field', async () => {
+    mockList()
+    const user = userEvent.setup()
+    renderView()
+
+    await screen.findByTestId('transaction-row-1')
+    const form = await openCreateForm(user)
+
+    // Submit with everything blank: ticker, brokerName, quantity,
+    // unitPrice and tradedAt are all required.
+    await user.click(within(form).getByRole('button', { name: /^guardar$/i }))
+
+    const tickerInput = within(form).getByLabelText('Ticker')
+    expect(tickerInput).toHaveAttribute('aria-invalid', 'true')
+    expect(tickerInput).toHaveFocus()
+
+    const alerts = within(form).getAllByRole('alert')
+    expect(alerts.length).toBeGreaterThanOrEqual(5)
+    expect(alerts.some((alert) => /ticker es obligatorio/i.test(alert.textContent ?? ''))).toBe(true)
+
+    // The fees field is still optional and untouched: it keeps its
+    // neutral hint, not an error.
+    expect(within(form).getByLabelText('Comisiones')).toHaveAttribute('aria-invalid', 'false')
+    expect(within(form).getByText('Opcional')).toBeInTheDocument()
+  })
+
+  it('invalidates a non-decimal amount with its own error and moves focus there when it is the first invalid field', async () => {
+    mockList()
+    const user = userEvent.setup()
+    renderView()
+
+    await screen.findByTestId('transaction-row-1')
+    const form = await openCreateForm(user)
+
+    await user.type(within(form).getByLabelText('Ticker'), 'QQQ')
+    await user.type(within(form).getByLabelText('Bróker'), 'Hapi')
+    await user.type(within(form).getByLabelText('Cantidad'), 'abc')
+    await user.type(within(form).getByLabelText('Precio unitario'), '1')
+    await user.type(within(form).getByLabelText('Fecha'), '2026-06-30')
+    await user.click(within(form).getByRole('button', { name: /^guardar$/i }))
+
+    const quantityInput = within(form).getByLabelText('Cantidad')
+    expect(quantityInput).toHaveAttribute('aria-invalid', 'true')
+    expect(quantityInput).toHaveFocus()
+    expect(within(form).getByText(/cantidad debe ser un número decimal positivo/i)).toBeInTheDocument()
+  })
 })
 
 describe('editing a transaction', () => {

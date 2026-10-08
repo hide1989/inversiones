@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import {
   useCreateTransaction,
   useDeleteTransaction,
@@ -166,11 +166,36 @@ function TransactionForm({ title, initial, submitting, problem, onSubmit, onCanc
   const [form, setForm] = useState<FormState>(initial)
   const [errors, setErrors] = useState<FormErrors>({})
 
+  // One ref per field, in the same order the form presents them, so a
+  // failed submit can move focus to whichever one is first invalid —
+  // Important 4: before this, focus stayed on the Guardar button and a
+  // screen-reader user heard nothing at all about why the form did not
+  // submit.
+  const tickerRef = useRef<HTMLInputElement>(null)
+  const brokerNameRef = useRef<HTMLInputElement>(null)
+  const quantityRef = useRef<HTMLInputElement>(null)
+  const unitPriceRef = useRef<HTMLInputElement>(null)
+  const feesRef = useRef<HTMLInputElement>(null)
+  const tradedAtRef = useRef<HTMLInputElement>(null)
+
+  const FIELD_REFS: ReadonlyArray<[keyof FormErrors, typeof tickerRef]> = [
+    ['ticker', tickerRef],
+    ['brokerName', brokerNameRef],
+    ['quantity', quantityRef],
+    ['unitPrice', unitPriceRef],
+    ['fees', feesRef],
+    ['tradedAt', tradedAtRef],
+  ]
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const validationErrors = validate(form)
     setErrors(validationErrors)
-    if (Object.keys(validationErrors).length > 0) return
+    if (Object.keys(validationErrors).length > 0) {
+      const firstInvalid = FIELD_REFS.find(([key]) => validationErrors[key] !== undefined)
+      firstInvalid?.[1].current?.focus()
+      return
+    }
     onSubmit(toRequestBody(form))
   }
 
@@ -184,14 +209,16 @@ function TransactionForm({ title, initial, submitting, problem, onSubmit, onCanc
             value={form.ticker}
             onChange={(event) => setForm({ ...form, ticker: event.target.value })}
             disabled={submitting}
-            hint={errors.ticker}
+            invalid={errors.ticker}
+            inputRef={tickerRef}
           />
           <Field
             label="Bróker"
             value={form.brokerName}
             onChange={(event) => setForm({ ...form, brokerName: event.target.value })}
             disabled={submitting}
-            hint={errors.brokerName}
+            invalid={errors.brokerName}
+            inputRef={brokerNameRef}
           />
           <SelectField
             label="Tipo"
@@ -224,7 +251,8 @@ function TransactionForm({ title, initial, submitting, problem, onSubmit, onCanc
             value={form.quantity}
             onChange={(event) => setForm({ ...form, quantity: event.target.value })}
             disabled={submitting}
-            hint={errors.quantity}
+            invalid={errors.quantity}
+            inputRef={quantityRef}
           />
           <Field
             label="Precio unitario"
@@ -233,7 +261,8 @@ function TransactionForm({ title, initial, submitting, problem, onSubmit, onCanc
             value={form.unitPrice}
             onChange={(event) => setForm({ ...form, unitPrice: event.target.value })}
             disabled={submitting}
-            hint={errors.unitPrice}
+            invalid={errors.unitPrice}
+            inputRef={unitPriceRef}
           />
           <Field
             label="Comisiones"
@@ -242,7 +271,9 @@ function TransactionForm({ title, initial, submitting, problem, onSubmit, onCanc
             value={form.fees}
             onChange={(event) => setForm({ ...form, fees: event.target.value })}
             disabled={submitting}
-            hint={errors.fees ?? 'Opcional'}
+            hint={errors.fees === undefined ? 'Opcional' : undefined}
+            invalid={errors.fees}
+            inputRef={feesRef}
           />
           <Field
             label="Fecha"
@@ -250,7 +281,8 @@ function TransactionForm({ title, initial, submitting, problem, onSubmit, onCanc
             value={form.tradedAt}
             onChange={(event) => setForm({ ...form, tradedAt: event.target.value })}
             disabled={submitting}
-            hint={errors.tradedAt}
+            invalid={errors.tradedAt}
+            inputRef={tradedAtRef}
           />
         </div>
 
