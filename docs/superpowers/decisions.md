@@ -188,3 +188,41 @@ frontend must not display these raw; route every fundamentals metric through
 "fix" the value by computing on it — formatting a string for display is string truncation, which is
 sanctioned; arithmetic is not. The upstream contamination is a backend finding, recorded here and
 reported to the user, not patched from the browser.
+
+## Nullability is a property of the contract's types, not of the sample you fetched
+
+I twice got this wrong by reasoning from live responses instead of from the Java types, so the rule
+is now explicit: **to decide whether a Zod field is nullable, read the backend DTO and its domain
+model — never infer it from what a few requests happened to return.**
+
+The mechanism: every decimal DTO field is built with `DecimalStrings.of(BigDecimal)`, which returns
+`null` whenever the value is null. So **any DTO field fed by a `BigDecimal` with no non-null
+guarantee is nullable on the wire**, regardless of whether a sample shows it populated.
+
+Applying that structurally:
+- **`fundamentals.ts`** — all **thirteen** metrics are plain `BigDecimal` in the `Fundamentals`
+  domain model. Twelve were widened from observed nulls; `beta` was not, because no sampled ticker
+  omitted it. It is nullable all the same. (Only AMZN, NU and QQQ resolve at all, so the sample was
+  three tickers deciding thirteen fields.)
+- **`watchlist.ts`** — `price`, `technicalScore`, `wsbScore` and `combinedScore` are all
+  `BigDecimal`, and `signal` is a plain `String` passed through with no null check. **All five value
+  fields are nullable**, not the two I observed. The UI consequence is that the signal column needs
+  its own no-data state, and a null `combinedScore` makes the sort's null handling load-bearing
+  rather than decorative.
+
+My instruction "do not widen anything beyond the fields named above" is what kept `beta` narrow. The
+implementer followed it and flagged the call, which was correct conduct; the instruction was wrong.
+
+**Where this does NOT apply.** `earnings.ts` declares `daysRemaining: z.number()` and
+`Earnings.tsx` subtracts two of them to sort. That is sound: `EarningsEventDto` declares
+`long daysRemaining`, a genuine JSON number, while `estimatedEps` and `historicalSurprise` are
+strings. The backend drew the line in exactly the right place — decimals as strings, integer counts
+as numbers — and subtracting an integer day count is not arithmetic on a decimal. No change needed.
+
+## The 404 detail gets Spanish framing, with the server's text kept (Task 11)
+
+`GET /fundamentals/{ticker}` 404s for 14 of 17 holdings with `detail: "Could not resolve ticker:
+MSFT"` — English text in a Spanish UI. **Ruling: a Spanish sentence frames the failure, and the
+server's `detail` is still shown beneath it.** Dropping the detail discards information the user may
+need; showing it alone leaks an English internal string as the whole message. Framing keeps both,
+and does not interpret the server's meaning.
