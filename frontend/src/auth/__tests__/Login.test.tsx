@@ -128,6 +128,34 @@ describe('a failed login', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.queryByText(/sesión expiró/i)).not.toBeInTheDocument()
   })
+
+  // Final review Important 5: errorDetail was non-null only for an
+  // ApiError. A fetch rejection (backend down, CORS, DNS) is a
+  // TypeError, not an ApiError, so before this fix the button returned
+  // to "Iniciar sesión" with absolutely no message on screen — the one
+  // unauthenticated screen, unlike every authenticated view, had no
+  // generic Spanish fallback at all.
+  it('shows a generic message on a network failure (a TypeError, not an ApiError)', async () => {
+    // HttpResponse.error() makes MSW reject the underlying fetch itself —
+    // the browser's actual failure mode for a down backend, CORS, or
+    // DNS — surfacing to the app as a TypeError, never as an ApiError.
+    // (Throwing inside a handler, by contrast, makes MSW synthesize a
+    // JSON response of the thrown error — a different, unrealistic
+    // shape that would not exercise this code path at all.)
+    server.use(http.post(`${API_BASE}/auth/login`, () => HttpResponse.error()))
+
+    const user = userEvent.setup()
+    renderApp('/login')
+
+    await user.type(screen.getByLabelText('Usuario'), 'david')
+    await user.type(screen.getByLabelText('Contraseña'), 'whatever')
+    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/no se pudo iniciar sesión/i)
+    expect(screen.queryByText('Portfolio content')).not.toBeInTheDocument()
+    expect(localStorage.length).toBe(0)
+  })
 })
 
 describe('a failed login followed by a successful one', () => {

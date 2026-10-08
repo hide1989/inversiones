@@ -5,6 +5,14 @@ import { ApiError } from '../api/problem'
 import { useAuth } from '../auth/useAuth'
 import { Button, Field, Surface } from '../design/primitives'
 
+// Mirrors ErrorState's own GENERIC_MESSAGE, which every authenticated
+// view already falls back to on a non-ApiError failure. /login renders
+// standalone with no shared ErrorState, so without this fallback a
+// fetch rejection (backend down, CORS, DNS — a TypeError, not an
+// ApiError) showed no message at all: the button simply returned to
+// "Iniciar sesión" with nothing on screen to explain why.
+const GENERIC_LOGIN_ERROR = 'No se pudo iniciar sesión. Verifica tu conexión e inténtalo de nuevo.'
+
 function readFromState(state: unknown): string | null {
   if (typeof state !== 'object' || state === null) {
     return null
@@ -40,7 +48,14 @@ export function Login() {
     }
   }
 
-  const errorDetail = mutation.error instanceof ApiError ? mutation.error.problem.detail : null
+  // The anti-enumeration guarantee lives entirely in the backend's own
+  // byte-identical ApiError bodies for a wrong password vs an unknown
+  // username — this view never adds its own distinction on top of
+  // that. A non-ApiError failure (a TypeError from a rejected fetch) is
+  // a different case altogether — not a credentials problem, so the
+  // generic fallback here cannot leak anything about enumeration.
+  const errorMessage =
+    mutation.error instanceof ApiError ? mutation.error.problem.detail : mutation.isError ? GENERIC_LOGIN_ERROR : null
 
   return (
     // A real `<main>` landmark: unlike every authenticated route (which
@@ -78,9 +93,9 @@ export function Login() {
             required
           />
 
-          {errorDetail !== null && (
+          {errorMessage !== null && (
             <p role="alert" className="font-sans text-sm text-negative">
-              {errorDetail}
+              {errorMessage}
             </p>
           )}
 
