@@ -13,10 +13,14 @@ base('the login route has zero accessibility violations', async ({ page }) => {
   await expectNoAccessibilityViolations(page)
 })
 
-// The seven authenticated nav routes, each waited on a locator that only
-// exists once its data has actually rendered (never just "navigation
-// resolved") so axe scans the real content state, not a loading
-// skeleton.
+// The seven authenticated nav routes, plus /specimen — an eighth
+// reachable route (AppShell.tsx keeps it mounted, out of the nav list
+// but not out of the router), and it ships in the production bundle
+// (dist/assets/Specimen-*.js). "Every route" means every route that
+// ships, not every route that is linked from the nav — so it gets swept
+// too, each waited on a locator that only exists once its data has
+// actually rendered (never just "navigation resolved") so axe scans the
+// real content state, not a loading skeleton.
 const AUTHENTICATED_ROUTES: ReadonlyArray<{ path: string; heading: string }> = [
   { path: '/posiciones', heading: 'Posiciones' },
   { path: '/senales', heading: 'Señales' },
@@ -25,6 +29,7 @@ const AUTHENTICATED_ROUTES: ReadonlyArray<{ path: string; heading: string }> = [
   { path: '/sintesis-ia', heading: 'Síntesis IA' },
   { path: '/earnings', heading: 'Earnings' },
   { path: '/watchlist', heading: 'Watchlist' },
+  { path: '/specimen', heading: 'Specimen — sistema de diseño' },
 ]
 
 for (const route of AUTHENTICATED_ROUTES) {
