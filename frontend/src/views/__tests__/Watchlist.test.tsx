@@ -78,6 +78,50 @@ describe('the real live-captured watchlist (31 items, 12 null for price/technica
   })
 })
 
+describe('sorting with nulls in the default sort column', () => {
+  it('parks null combinedScore rows at the end of descending order, never interleaved with scored rows', async () => {
+    // combinedScore is nullable now (Finding 1) — the default sort column
+    // itself can carry nulls. Three scored rows plus one with every
+    // value field null: a do-nothing sentinel (e.g. treating null as 0)
+    // would place NOCOMB between MID (5) and LOW (2) instead of at the
+    // true end of descending order.
+    const withNullCombined = [
+      { ticker: 'HIGH', price: '10.00', technicalScore: '8', wsbScore: '8', combinedScore: '8', signal: 'COMPRA' },
+      { ticker: 'NOCOMB', price: null, technicalScore: null, wsbScore: null, combinedScore: null, signal: null },
+      { ticker: 'MID', price: '20.00', technicalScore: '5', wsbScore: '5', combinedScore: '5', signal: 'MANTENER' },
+      { ticker: 'LOW', price: '30.00', technicalScore: '2', wsbScore: '2', combinedScore: '2', signal: 'VENTA' },
+    ]
+    mockWatchlist(withNullCombined)
+    renderView()
+
+    const rows = await screen.findAllByTestId(/^watchlist-row-/)
+    const tickerOrder = rows.map((row) => row.getAttribute('data-testid'))
+    // Default sort is combinedScore descending: HIGH(8), MID(5), LOW(2),
+    // then the null row at the stable end — never between two real scores.
+    expect(tickerOrder).toEqual([
+      'watchlist-row-HIGH',
+      'watchlist-row-MID',
+      'watchlist-row-LOW',
+      'watchlist-row-NOCOMB',
+    ])
+  })
+
+  it('renders a dash, never a BUY/SELL-implying badge, for a null signal', async () => {
+    const withNullSignal = [
+      { ticker: 'NOCOMB', price: null, technicalScore: null, wsbScore: null, combinedScore: null, signal: null },
+    ]
+    mockWatchlist(withNullSignal)
+    renderView()
+
+    const row = await screen.findByTestId('watchlist-row-NOCOMB')
+    // Every nullable cell in this row (price, technical, WSB, combined,
+    // signal) renders the same dash — none of them render as a Tag/badge.
+    expect(within(row).getAllByText('—').length).toBeGreaterThanOrEqual(5)
+    expect(within(row).queryByText('COMPRA')).not.toBeInTheDocument()
+    expect(within(row).queryByText('VENTA')).not.toBeInTheDocument()
+  })
+})
+
 describe('shared states', () => {
   it('shows the empty state when the watchlist has no items', async () => {
     mockWatchlist([])

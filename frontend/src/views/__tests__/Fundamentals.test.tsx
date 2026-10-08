@@ -90,3 +90,34 @@ describe('hasData: false', () => {
     expect(screen.queryByTestId('fundamentals-metric-grid')).not.toBeInTheDocument()
   })
 })
+
+describe('GET /fundamentals/{ticker} 404s (the common case live — 14 of 17 holdings)', () => {
+  it('renders the server detail, framed in Spanish, as an alert distinguishable from the hasData:false empty state', async () => {
+    server.use(
+      http.get(`${API_BASE}/fundamentals/MSFT`, () =>
+        HttpResponse.json(
+          {
+            type: 'about:blank',
+            title: 'Not Found',
+            status: 404,
+            detail: 'Could not resolve ticker: MSFT',
+            instance: '/api/v1/fundamentals/MSFT',
+          },
+          { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    renderPanel('MSFT')
+
+    // "we could not look it up" is an alert with the server's own detail...
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/could not resolve ticker: msft/i)).toBeInTheDocument()
+    // ...framed in Spanish rather than showing the raw English string alone...
+    expect(within(alert).getByText(/no se pudo obtener la información de fundamentales/i)).toBeInTheDocument()
+
+    // ...and is NOT the "we looked and there is nothing" empty state: the
+    // hasData:false message and the metric grid must both be absent here.
+    expect(screen.queryByText(/no hay datos de fundamentales/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('fundamentals-metric-grid')).not.toBeInTheDocument()
+  })
+})

@@ -4,6 +4,22 @@ import { Surface } from '../design/primitives'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
 import type { Fundamentals as FundamentalsData } from '../api/schemas/fundamentals'
 
+/**
+ * `GET /fundamentals/{ticker}` 404s with an RFC 7807 body for most
+ * holdings (14 of 17 live), so this is the common error case, not an
+ * edge one — and its `detail` is the backend's own English internal
+ * string ("Could not resolve ticker: MSFT"), which would read oddly
+ * alone in an otherwise Spanish UI. Dropping it would discard
+ * information the user may need to act on; showing it alone would leak
+ * that English string as the whole message. Framing it in Spanish and
+ * keeping the server's own detail beneath it keeps both without
+ * reinterpreting what the server meant.
+ */
+function errorMessageFor(detail: string | undefined): string {
+  const frame = 'No se pudo obtener la información de fundamentales.'
+  return detail !== undefined ? `${frame} ${detail}` : frame
+}
+
 /** A metric key from `FundamentalsData`, excluding the non-metric fields. */
 type MetricKey = 'per' | 'peg' | 'priceToBook' | 'priceToSales' | 'evToEbitda' | 'roe' | 'netMargin' |
   'revenueCagr5y' | 'epsCagr5y' | 'debtToEquity' | 'currentRatio' | 'beta' | 'dividendYield'
@@ -113,7 +129,12 @@ export function FundamentalsPanel({ ticker, onClose }: FundamentalsPanelProps) {
         </button>
       </div>
       {isPending && <LoadingState rows={3} />}
-      {isError && <ErrorState message={error instanceof Error ? error.message : undefined} onRetry={() => refetch()} />}
+      {isError && (
+        <ErrorState
+          message={errorMessageFor(error instanceof Error ? error.message : undefined)}
+          onRetry={() => refetch()}
+        />
+      )}
       {!isPending && !isError && !data.hasData && (
         <EmptyState message={`No hay datos de fundamentales para ${ticker}.`} />
       )}

@@ -41,15 +41,24 @@ const SIGNAL_TONE: Record<string, 'positive' | 'negative' | 'accent' | 'neutral'
   'VENTA': 'negative',
 }
 
+// A null `signal` must read as "no signal computed", never as a blank
+// badge, an empty-but-aligned cell, or (worst) a level that implies a
+// recommendation the backend never made.
 function SignalCell({ item }: { item: WatchlistItem }) {
+  if (item.signal === null) return <DashCell />
   return <Tag label={item.signal} tone={SIGNAL_TONE[item.signal] ?? 'neutral'} />
 }
 
+// `-1` is a sort-only sentinel, never displayed and never fed to
+// `formatScore`/`formatDecimalString` — it exists purely to park a null
+// row at one stable end of `compareDecimalStrings`'s ordering (no real
+// score is negative), for every nullable numeric column including the
+// default sort column (`combinedScore`), which can now carry nulls too.
 function sortValueFor(item: WatchlistItem, key: string): string {
   if (key === 'price') return item.price ?? '-1'
   if (key === 'technicalScore') return item.technicalScore ?? '-1'
-  if (key === 'wsbScore') return item.wsbScore
-  if (key === 'combinedScore') return item.combinedScore
+  if (key === 'wsbScore') return item.wsbScore ?? '-1'
+  if (key === 'combinedScore') return item.combinedScore ?? '-1'
   return ''
 }
 
@@ -99,18 +108,26 @@ function buildColumns(onOpenFundamentals: (ticker: string) => void): DataTableCo
       header: 'WSB',
       sortable: true,
       width: '6rem',
-      render: (item) => (
-        <span className="block w-full text-right font-mono tabular-nums text-fg">{formatScore(item.wsbScore)}</span>
-      ),
+      render: (item) =>
+        item.wsbScore === null ? (
+          <DashCell />
+        ) : (
+          <span className="block w-full text-right font-mono tabular-nums text-fg">{formatScore(item.wsbScore)}</span>
+        ),
     },
     {
       key: 'combinedScore',
       header: 'Combinado',
       sortable: true,
       width: '6.5rem',
-      render: (item) => (
-        <span className="block w-full text-right font-mono tabular-nums text-fg">{formatScore(item.combinedScore)}</span>
-      ),
+      render: (item) =>
+        item.combinedScore === null ? (
+          <DashCell />
+        ) : (
+          <span className="block w-full text-right font-mono tabular-nums text-fg">
+            {formatScore(item.combinedScore)}
+          </span>
+        ),
     },
     {
       key: 'signal',
