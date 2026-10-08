@@ -30,9 +30,8 @@ import java.util.UUID;
  * ({@link TransactionNotFoundException} and {@link UnresolvedTickerException} to 404,
  * {@link InvalidCredentialsException} to 401, {@link SignalRefreshInProgressException} to 409)
  * because those are cases a client must be able to branch on. Every other {@link DomainException}
- * is a business-rule rejection of the request's
- * content, which is a 400
- * regardless of which rule fired — adding a bespoke status per exception subtype would just make
+ * is a business-rule rejection of the request's content, which is a 400 regardless of which rule
+ * fired — adding a bespoke status per exception subtype would just make
  * the client's error handling brittle to a domain refactor. Anything not a {@link DomainException}
  * at all is a bug, not a rejected request, so it is a 500 with a correlation id the operator can
  * grep for in the log; the stack trace itself is logged, never returned, so an unmapped failure
