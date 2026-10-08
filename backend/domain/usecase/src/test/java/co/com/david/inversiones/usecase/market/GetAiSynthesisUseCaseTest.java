@@ -111,4 +111,29 @@ class GetAiSynthesisUseCaseTest {
         assertThat(report.withoutData()).containsExactly(TSLA);
         assertThat(report.averageScore()).isEqualByComparingTo("0.00");
     }
+
+    /**
+     * Live-contract regression: n8n can mark an entry {@code sin_datos: false} while still
+     * sending a null {@code score_ia} (a partially-failed LLM call). Before the fix, {@code
+     * hasData} was trusted verbatim from the upstream flag, so this entry landed in {@code
+     * withData} and {@link GetAiSynthesisUseCase#averageOf} threw a {@link NullPointerException}
+     * summing a null {@link BigDecimal} — the exact HTTP 500 the final review found on
+     * {@code /sintesis-ia}. A ticker whose score is genuinely absent must be excluded from
+     * {@code withData} regardless of what {@code hasData} claims.
+     */
+    @Test
+    void aTickerMarkedHasDataButWithANullScoreIsExcludedRatherThanThrowing() {
+        when(transactionRepository.findAll()).thenReturn(List.of(holding(NVDA), holding(MSFT)));
+        AiSynthesis corrupted = AiSynthesis.builder()
+                .ticker(NVDA).snapshotDate(DATE).iaScore(null)
+                .signal("COMPRA").conviction("alta").horizon("3-6 meses").summary("...")
+                .hasData(true).build();
+        when(synthesisProvider.fetchSyntheses(any())).thenReturn(List.of(corrupted, withData(MSFT, "6")));
+
+        AiSynthesisReport report = useCase.execute();
+
+        assertThat(report.withData()).extracting(s -> s.ticker().symbol()).containsExactly("MSFT");
+        assertThat(report.withoutData()).containsExactly(NVDA);
+        assertThat(report.averageScore()).isEqualByComparingTo("6.00");
+    }
 }

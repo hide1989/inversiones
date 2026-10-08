@@ -48,7 +48,7 @@ public class GetAiSynthesisUseCase {
         List<AiSynthesis> withData = new ArrayList<>();
         List<Ticker> withoutData = new ArrayList<>();
         for (AiSynthesis synthesis : syntheses) {
-            if (synthesis.hasData()) {
+            if (isUsable(synthesis)) {
                 withData.add(synthesis);
             } else {
                 withoutData.add(synthesis.ticker());
@@ -56,6 +56,17 @@ public class GetAiSynthesisUseCase {
         }
 
         return new AiSynthesisReport(withData, withoutData, averageOf(withData));
+    }
+
+    /**
+     * {@code hasData} alone is not trustworthy: n8n can report {@code sin_datos: false} while
+     * still sending a null {@code score_ia} (a partially-failed LLM call), and summing that null
+     * in {@link #averageOf} would throw a {@link NullPointerException} — the HTTP 500 the final
+     * branch review found on {@code /sintesis-ia}. A synthesis only counts as usable when the
+     * upstream flag says so AND a score actually came with it.
+     */
+    private boolean isUsable(AiSynthesis synthesis) {
+        return synthesis.hasData() && synthesis.iaScore() != null;
     }
 
     private Set<Ticker> heldTickers() {
