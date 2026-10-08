@@ -43,7 +43,11 @@ export function Login() {
   const errorDetail = mutation.error instanceof ApiError ? mutation.error.problem.detail : null
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-ground px-4">
+    // A real `<main>` landmark: unlike every authenticated route (which
+    // gets one from AppShell), /login renders standalone with no shell
+    // around it, so without this the whole page has zero landmarks —
+    // axe's landmark-one-main and region rules both catch that.
+    <main className="flex min-h-screen items-center justify-center bg-ground px-4">
       <Surface level={1} className="w-full max-w-sm p-6">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
           <h1 className="font-mono text-sm font-medium uppercase tracking-wide text-fg">Iniciar sesión</h1>
@@ -85,6 +89,6 @@ export function Login() {
           </Button>
         </form>
       </Surface>
-    </div>
+    </main>
   )
 }

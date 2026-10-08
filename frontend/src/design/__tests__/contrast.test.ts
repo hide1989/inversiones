@@ -44,6 +44,10 @@ describe('token contrast', () => {
   const surface3 = readToken('--color-surface-3')
   const fg = readToken('--color-fg')
   const fgMuted = readToken('--color-fg-muted')
+  const fgSubtle = readToken('--color-fg-subtle')
+  const negative = readToken('--color-negative')
+  const positive = readToken('--color-positive')
+  const accent = readToken('--color-accent')
 
   it('primary text meets 4.5:1 on the ground', () => {
     expect(contrastRatio(fg, ground)).toBeGreaterThanOrEqual(MIN_CONTRAST)
@@ -59,5 +63,29 @@ describe('token contrast', () => {
 
   it('secondary text meets 4.5:1 on the most raised surface', () => {
     expect(contrastRatio(fgMuted, surface3)).toBeGreaterThanOrEqual(MIN_CONTRAST)
+  })
+
+  // Task 12's axe sweep caught `--color-fg-subtle` failing contrast
+  // everywhere it is used as real text (EmptyState messages, snapshot
+  // dates, hint captions) rather than as a decorative/disabled-only tone
+  // its own doc comment in tokens.css implied — it was never covered
+  // here, unlike `fg` and `fgMuted` above. Checked against every surface
+  // it actually renders on, not just the two hardest cases above, since
+  // this token appears directly on `ground` (EmptyState) as well as
+  // nested surfaces.
+  it('subtle text meets 4.5:1 on every surface it is actually rendered on', () => {
+    for (const background of [ground, readToken('--color-surface-1'), readToken('--color-surface-2'), surface3]) {
+      expect(contrastRatio(fgSubtle, background)).toBeGreaterThanOrEqual(MIN_CONTRAST)
+    }
+  })
+
+  // `Tag.tsx` always renders its label on `bg-surface-3` regardless of
+  // tone, so every semantic sign colour must clear 4.5:1 specifically
+  // against surface3 — axe caught `negative` failing this for the
+  // Watchlist's "VENTA" tag (4.43:1 before this token's value changed).
+  it('every semantic sign colour meets 4.5:1 on the Tag background (surface3)', () => {
+    expect(contrastRatio(negative, surface3)).toBeGreaterThanOrEqual(MIN_CONTRAST)
+    expect(contrastRatio(positive, surface3)).toBeGreaterThanOrEqual(MIN_CONTRAST)
+    expect(contrastRatio(accent, surface3)).toBeGreaterThanOrEqual(MIN_CONTRAST)
   })
 })

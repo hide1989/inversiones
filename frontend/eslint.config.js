@@ -20,4 +20,15 @@ export default tseslint.config(
       ...jsxA11y.configs.recommended.rules,
     },
   },
+  {
+    // Playwright test code, not React: `fixtures/*.ts` destructures a
+    // `use` callback per Playwright's own fixture API
+    // (https://playwright.dev/docs/test-fixtures), which
+    // eslint-plugin-react-hooks's name heuristic otherwise mistakes for
+    // React's `use()` hook.
+    files: ['e2e/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
 )

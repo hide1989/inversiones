@@ -153,7 +153,7 @@ function RefreshControl() {
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+      <Button data-testid="refresh-signals-button" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
         {refresh.isPending ? 'Actualizando…' : 'Actualizar señales'}
       </Button>
       {refresh.isSuccess && (

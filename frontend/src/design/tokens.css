@@ -22,7 +22,7 @@
   /* ---- colour: text --------------------------------------------------- */
   --color-fg: #e6e8ec; /* primary text: figures, tickers, headings */
   --color-fg-muted: #a7adb8; /* secondary text: labels, column headers */
-  --color-fg-subtle: #6b7280; /* placeholders, disabled text, hints only */
+  --color-fg-subtle: #9398a2; /* placeholders, disabled text, hints only */
 
   /* ---- colour: single accent ------------------------------------------ */
   --color-accent: #f5a524;
@@ -30,7 +30,7 @@
 
   /* ---- colour: semantic sign (never decorative) ------------------------ */
   --color-positive: #36b37e;
-  --color-negative: #f2574c;
+  --color-negative: #f3645a;
 
   /* ---- colour: structure ------------------------------------------------ */
   --color-border: #2a2d35; /* minimal use: a single hairline, not a frame */

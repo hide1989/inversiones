@@ -4,8 +4,20 @@ import { z } from 'zod'
 // `application/problem+json`. Validated with Zod like every other
 // response body, so a malformed problem response fails the same way a
 // malformed success response would — not with an unchecked cast.
+//
+// `type` is genuinely optional per RFC 7807 §3.1 ("its value is
+// 'about:blank'" when absent) and the live backend never sends it —
+// confirmed against every error response this app's own e2e suite hits
+// (login, transactions, signal refresh). Requiring it here would fail
+// ProblemDetailSchema for every single error response the real backend
+// produces, silently falling back to rendering the raw JSON body as the
+// user-facing message instead of the backend's own `detail` — exactly
+// the class of schema-vs-live-response drift this project has hit
+// before with other endpoints' fixtures. `.default()` supplies the
+// RFC's own default so a present `type` is still validated and an
+// absent one does not fail the whole problem.
 export const ProblemDetailSchema = z.object({
-  type: z.string(),
+  type: z.string().default('about:blank'),
   title: z.string(),
   status: z.number(),
   detail: z.string(),
