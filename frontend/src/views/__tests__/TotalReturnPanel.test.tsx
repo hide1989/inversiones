@@ -69,13 +69,21 @@ describe('the available case, from the real captured fixture', () => {
     expect(screen.getByText(/488,557\.62/)).toBeInTheDocument()
   })
 
-  it('renders both exchange rates with their dates', async () => {
+  it('renders both exchange rates, grouped and rounded to two decimals, with their dates', async () => {
     mockReturns(validTotalReturnResponse)
     renderPanel()
 
     await screen.findByText(/1,799,360\.10/)
-    expect(screen.getByText(/3568\.42/)).toBeInTheDocument()
-    expect(screen.getByText(/3199\.5757/)).toBeInTheDocument()
+    // rate.rate is NUMERIC(38,10) on the wire ("3568.4200000000" /
+    // "3199.5757230000" in the fixture) — Important 6: the raw string
+    // was rendered verbatim before this fix, which would have made
+    // "3568.4200000000 COP/USD" the visible text. formatDecimalString(
+    // rate, 2, true) is what produces the grouped, rounded "3,568.42"
+    // and "3,199.58" (the third decimal, 5, rounds 57 up to 58) below —
+    // a regex loose enough to match the raw unformatted string would
+    // defeat this assertion's whole purpose, so these are exact.
+    expect(screen.getByText('3,568.42 COP/USD')).toBeInTheDocument()
+    expect(screen.getByText('3,199.58 COP/USD')).toBeInTheDocument()
     expect(screen.getAllByText('2026-10-07').length).toBeGreaterThanOrEqual(2)
   })
 
@@ -128,7 +136,7 @@ describe('the unavailable case: non-negotiable #2', () => {
     // Segments and the base rate are still unaffected and still render —
     // the backend only nulls the currency-effect fields, not the rest.
     expect(screen.getByText('Activos USD')).toBeInTheDocument()
-    expect(screen.getByText(/3568\.42/)).toBeInTheDocument()
+    expect(screen.getByText('3,568.42 COP/USD')).toBeInTheDocument()
   })
 
   it('does not render the total return figure when the effect is unavailable', async () => {

@@ -1,6 +1,6 @@
 import { useTotalReturn } from '../api/queries/returns'
-import { formatMoney } from '../api/money'
-import { signOf } from '../api/decimalSign'
+import { formatDecimalString, formatMoney } from '../api/money'
+import { magnitudeOf, signOf } from '../api/decimalSign'
 import { Delta, Figure, Surface } from '../design/primitives'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
 import type { ReturnSegment, TotalReturnResponse } from '../api/schemas/returns'
@@ -30,18 +30,13 @@ function SegmentRow({ segment }: { segment: ReturnSegment }) {
       </td>
       <td className="py-2">
         <Delta
-          value={formatMoney({ amount: stripSign(segment.assetGain.amount), currency: segment.assetGain.currency }, { withCurrency: false })}
+          value={formatMoney({ amount: magnitudeOf(segment.assetGain.amount), currency: segment.assetGain.currency }, { withCurrency: false })}
           sign={signOf(segment.assetGain.amount)}
           currency={segment.assetGain.currency}
         />
       </td>
     </tr>
   )
-}
-
-/** String slicing only — no numeric coercion — matching `magnitudeOf` in decimalSign.ts. */
-function stripSign(amount: string): string {
-  return amount.startsWith('-') ? amount.slice(1) : amount
 }
 
 function SegmentsTable({ segments }: { segments: ReadonlyArray<ReturnSegment> }) {
@@ -75,11 +70,18 @@ function SegmentsTable({ segments }: { segments: ReadonlyArray<ReturnSegment> })
   )
 }
 
+/**
+ * The TRM is `NUMERIC(38,10)` (`V1__initial_schema.sql:58`), so `rate.rate`
+ * arrives as a ten-decimal string (e.g. `"3905.1700000000"`) — the only
+ * decimal in the app that was ever rendered raw rather than through
+ * `formatDecimalString`. Routed through it here the same way every other
+ * decimal in this panel already is.
+ */
 function RateRow({ label, rate }: { label: string; rate: { rate: string; rateDate: string } }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="font-mono text-xs uppercase tracking-wide text-fg-muted">{label}</span>
-      <span className="font-mono text-sm tabular-nums text-fg">{rate.rate} COP/USD</span>
+      <span className="font-mono text-sm tabular-nums text-fg">{formatDecimalString(rate.rate, 2, true)} COP/USD</span>
       <span className="font-mono text-xs tabular-nums text-fg-subtle">{rate.rateDate}</span>
     </div>
   )
@@ -124,7 +126,7 @@ function TwoComponentDisplay({ data }: { data: TotalReturnResponse }) {
           <span className="font-mono text-xs uppercase tracking-wide text-fg-muted">Ganancia por activos (COP)</span>
           <div data-testid="asset-gain-figure" className="text-2xl">
             <Delta
-              value={formatMoney({ amount: stripSign(assetGain.amount), currency: assetGain.currency }, { withCurrency: false })}
+              value={formatMoney({ amount: magnitudeOf(assetGain.amount), currency: assetGain.currency }, { withCurrency: false })}
               sign={signOf(assetGain.amount)}
             />
           </div>
@@ -134,7 +136,7 @@ function TwoComponentDisplay({ data }: { data: TotalReturnResponse }) {
           <div data-testid="exchange-effect-figure" className="text-2xl">
             <Delta
               value={formatMoney(
-                { amount: stripSign(exchangeEffect.amount), currency: exchangeEffect.currency },
+                { amount: magnitudeOf(exchangeEffect.amount), currency: exchangeEffect.currency },
                 { withCurrency: false },
               )}
               sign={signOf(exchangeEffect.amount)}
@@ -148,7 +150,7 @@ function TwoComponentDisplay({ data }: { data: TotalReturnResponse }) {
           <div data-testid="total-return-figure" className="text-base">
             <Delta
               value={formatMoney(
-                { amount: stripSign(data.totalReturnInCop.amount), currency: data.totalReturnInCop.currency },
+                { amount: magnitudeOf(data.totalReturnInCop.amount), currency: data.totalReturnInCop.currency },
                 { withCurrency: false },
               )}
               sign={signOf(data.totalReturnInCop.amount)}

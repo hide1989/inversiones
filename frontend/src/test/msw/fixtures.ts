@@ -70,8 +70,15 @@ export const validTotalReturnResponse = {
       assetGain: { amount: '222227.5900000000', currency: 'COP' },
     },
   ],
-  baseRate: { base: 'USD', quote: 'COP', rate: '3568.42', rateDate: '2026-10-07' },
-  currentRate: { base: 'USD', quote: 'COP', rate: '3199.575723', rateDate: '2026-10-07' },
+  // `rate` is NUMERIC(38,10) (V1__initial_schema.sql:58) — the real
+  // backend always emits all ten decimal places, never a two-decimal
+  // string. These were hand-rolled as "3568.42" / "3199.575723" by
+  // whoever wrote this fixture, a shape the API cannot produce; using
+  // it let TotalReturnPanel.test.tsx assert against the unformatted
+  // raw render instead of catching that the view skipped
+  // formatDecimalString entirely. Ten-decimal strings close that gap.
+  baseRate: { base: 'USD', quote: 'COP', rate: '3568.4200000000', rateDate: '2026-10-07' },
+  currentRate: { base: 'USD', quote: 'COP', rate: '3199.5757230000', rateDate: '2026-10-07' },
   currencyEffectAvailable: true,
   exchangeEffect: { amount: '-1310802.4800453331', currency: 'COP' },
   assetGainInCop: { amount: '1799360.1038878578', currency: 'COP' },
