@@ -3,7 +3,7 @@ import { useRefreshSignals, useSignalHistory, useSignalsDashboard } from '../api
 import { formatScore } from '../api/money'
 import { compareDecimalStrings } from '../api/decimalCompare'
 import { ApiError } from '../api/problem'
-import { Button, ScoreBar, Surface, Tag } from '../design/primitives'
+import { Button, NoDataCell, ScoreBar, Surface, Tag } from '../design/primitives'
 import { DataTable, type DataTableColumn, type DataTableSort } from '../components/table'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
 import type { SignalSnapshot, TickerSignal } from '../api/schemas/signals'
@@ -21,14 +21,10 @@ function hasData(signal: TickerSignal): boolean {
   return signal.score.usedSources.length > 0
 }
 
-/** A dash for a source that did not contribute to this ticker's score — absence, not a zero. */
-function DashCell() {
-  return (
-    <span aria-hidden="true" className="text-fg-subtle">
-      —
-    </span>
-  )
-}
+// A dash for a source that did not contribute to this ticker's score —
+// absence, not a zero. `NoDataCell` is the one shared definition (see
+// design/primitives/NoDataCell.tsx); this view no longer reimplements it.
+const DashCell = NoDataCell
 
 function SourceScoreCell({ snapshot, signal, source }: { snapshot: SignalSnapshot; signal: TickerSignal; source: Source }) {
   if (!hasData(signal)) return <DashCell />

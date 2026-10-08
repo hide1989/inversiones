@@ -4,7 +4,7 @@ import { usePortfolio } from '../api/queries/portfolio'
 import { formatMoney, formatPercent, formatQuantity } from '../api/money'
 import { compareDecimalStrings } from '../api/decimalCompare'
 import { magnitudeOf, signOf } from '../api/decimalSign'
-import { Delta, Figure, Surface, Tag } from '../design/primitives'
+import { Delta, Figure, NoDataCell, Surface, Tag } from '../design/primitives'
 import { DataTable, type DataTableColumn, type DataTableSort } from '../components/table'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
 import { TotalReturnPanel } from './TotalReturnPanel'
@@ -46,11 +46,7 @@ function sortPositions(positions: ReadonlyArray<Position>, sort: DataTableSort |
  */
 function UnpricedCell({ compact = false }: { compact?: boolean }) {
   if (compact) {
-    return (
-      <span aria-hidden="true" className="text-fg-subtle">
-        —
-      </span>
-    )
+    return <NoDataCell label="Sin valorar" />
   }
   return (
     <div className="flex flex-col items-end gap-0.5">

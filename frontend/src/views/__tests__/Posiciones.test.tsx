@@ -108,8 +108,17 @@ describe('a position with priced: false', () => {
     mockPortfolio(withUnpriced)
 
     renderPosiciones()
-    await screen.findByText('Sin valorar')
-    expect(screen.getByText(/falta precio de mercado o tasa de cambio/i)).toBeInTheDocument()
+    // Scoped to the market-value cell: the three other priced:false cells
+    // in this row (Día %, P&L, P&L %) now also carry their own accessible
+    // "Sin valorar" text (an sr-only span, per NoDataCell), which is the
+    // Important 3 fix — a screen reader must not hear a silently empty
+    // cell. getByText across the whole row would therefore match four
+    // times; the visible Tag + explanation is specifically the
+    // marketValue cell's non-compact rendering.
+    const row = await screen.findByTestId(`position-row-${firstPosition.ticker}-${firstPosition.brokerName}`)
+    const marketValueCell = within(row).getAllByText('Sin valorar')[0]
+    expect(marketValueCell).toBeInTheDocument()
+    expect(within(row).getByText(/falta precio de mercado o tasa de cambio/i)).toBeInTheDocument()
   })
 
   it('drives a visible summary note from unpricedTickers', async () => {

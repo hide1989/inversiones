@@ -2,20 +2,16 @@ import { useState } from 'react'
 import { useWatchlist } from '../api/queries/watchlist'
 import { formatDecimalString, formatScore } from '../api/money'
 import { compareDecimalStrings } from '../api/decimalCompare'
-import { Tag } from '../design/primitives'
+import { NoDataCell, Tag } from '../design/primitives'
 import { DataTable, type DataTableColumn, type DataTableSort } from '../components/table'
 import { EmptyState, ErrorState, LoadingState } from '../components/state'
 import { FundamentalsPanel } from './Fundamentals'
 import type { WatchlistItem } from '../api/schemas/watchlist'
 
-/** A dash for a field the backend documents as "frequently absent upstream" — absence, not a zero. */
-function DashCell() {
-  return (
-    <span aria-hidden="true" className="text-fg-subtle">
-      —
-    </span>
-  )
-}
+// A dash for a field the backend documents as "frequently absent upstream"
+// — absence, not a zero. `NoDataCell` is the one shared definition (see
+// design/primitives/NoDataCell.tsx); this view no longer reimplements it.
+const DashCell = NoDataCell
 
 function PriceCell({ item }: { item: WatchlistItem }) {
   if (item.price === null) return <DashCell />
