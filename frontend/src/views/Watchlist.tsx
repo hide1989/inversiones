@@ -76,6 +76,7 @@ function buildColumns(onOpenFundamentals: (ticker: string) => void): DataTableCo
           <span className="font-medium text-fg">{item.ticker}</span>
           <button
             type="button"
+            id={`fundamentales-trigger-${item.ticker}`}
             onClick={() => onOpenFundamentals(item.ticker)}
             aria-label={`Ver fundamentales de ${item.ticker}`}
             className="rounded-sm font-sans text-xs text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground"
@@ -166,6 +167,18 @@ export function Watchlist() {
     })
   }
 
+  // Looked up fresh by id rather than carried in a ref across renders —
+  // a captured DOM-node ref would go stale the moment this table
+  // re-sorts. Important 7: returns focus to the trigger on close
+  // instead of dropping it to <body>.
+  function handleCloseFundamentals() {
+    const ticker = openedTicker
+    setOpenedTicker(null)
+    if (ticker !== null) {
+      document.getElementById(`fundamentales-trigger-${ticker}`)?.focus()
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-mono text-xl font-semibold text-fg">Watchlist</h1>
@@ -178,7 +191,7 @@ export function Watchlist() {
         sort={sort}
         onSortChange={handleSortChange}
       />
-      {openedTicker !== null && <FundamentalsPanel ticker={openedTicker} onClose={() => setOpenedTicker(null)} />}
+      {openedTicker !== null && <FundamentalsPanel ticker={openedTicker} onClose={handleCloseFundamentals} />}
     </div>
   )
 }

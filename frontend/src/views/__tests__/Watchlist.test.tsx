@@ -76,6 +76,27 @@ describe('the real live-captured watchlist (31 items, 12 null for price/technica
     await screen.findByTestId('fundamentals-panel')
     expect(fundamentalsRequestCount).toBe(1)
   })
+
+  // Final review Important 7: before this fix, opening "Fundamentales"
+  // appended the panel at the bottom of the page with focus left on the
+  // trigger, so a keyboard user had to traverse the whole watchlist
+  // table to reach it, and "Cerrar" dropped focus to <body>.
+  it('moves focus into the panel on open and returns it to the trigger on close', async () => {
+    mockWatchlist(validWatchlistResponse)
+    mockFundamentals(validFundamentalsStockResponse)
+    renderView()
+
+    await screen.findAllByTestId(/^watchlist-row-/)
+    const user = userEvent.setup()
+    const trigger = screen.getByRole('button', { name: /ver fundamentales de spy/i })
+    await user.click(trigger)
+
+    const panel = await screen.findByTestId('fundamentals-panel')
+    expect(panel.parentElement).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: /^cerrar$/i }))
+    expect(trigger).toHaveFocus()
+  })
 })
 
 describe('sorting with nulls in the default sort column', () => {

@@ -202,6 +202,27 @@ describe('the derived scored variant', () => {
     await screen.findByTestId('signal-history-chart')
     expect(historyRequestCount).toBe(1)
   })
+
+  // Final review Important 7: before this fix, opening "Historial"
+  // appended the panel at the bottom of the page with focus left on the
+  // trigger, so a keyboard user had to traverse the whole signals table
+  // to reach it, and "Cerrar" dropped focus to <body>.
+  it('moves focus into the panel on open and returns it to the trigger on close', async () => {
+    mockSignals(validSignalsScoredResponse)
+    mockHistory(validSignalHistoryResponse)
+    renderView()
+
+    await screen.findAllByTestId(/^signal-row-/)
+    const user = userEvent.setup()
+    const trigger = screen.getByRole('button', { name: /ver historial de qqq/i })
+    await user.click(trigger)
+
+    const panel = await screen.findByTestId('signal-history-chart')
+    expect(panel.parentElement).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: /^cerrar$/i }))
+    expect(trigger).toHaveFocus()
+  })
 })
 
 describe('manual refresh', () => {

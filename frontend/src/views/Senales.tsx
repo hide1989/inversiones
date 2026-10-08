@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRefreshSignals, useSignalHistory, useSignalsDashboard } from '../api/queries/signals'
 import { formatScore } from '../api/money'
 import { compareDecimalStrings } from '../api/decimalCompare'
@@ -55,13 +55,28 @@ function SourceCountCell({ signal }: { signal: TickerSignal }) {
   )
 }
 
-function TickerCell({ signal, onOpenHistory }: { signal: TickerSignal; onOpenHistory: (ticker: string) => void }) {
+/**
+ * The trigger carries a stable `id` (`historial-trigger-<ticker>`),
+ * looked up by `handleCloseHistory` to restore focus on close. A
+ * captured DOM-node ref would go stale the moment this table re-sorts
+ * (the row's position, and the node itself if the table re-renders),
+ * so the id is looked up fresh at close time instead of carried across
+ * renders in a ref.
+ */
+function TickerCell({
+  signal,
+  onOpenHistory,
+}: {
+  signal: TickerSignal
+  onOpenHistory: (ticker: string) => void
+}) {
   return (
     <div className="flex flex-col items-start gap-0.5">
       <div className="flex items-center gap-2">
         <span className="font-medium text-fg">{signal.ticker}</span>
         <button
           type="button"
+          id={`historial-trigger-${signal.ticker}`}
           onClick={() => onOpenHistory(signal.ticker)}
           aria-label={`Ver historial de ${signal.ticker}`}
           className="rounded-sm font-sans text-xs text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground"
@@ -264,45 +279,66 @@ function SourceTrendRow({ source, history }: { source: Source; history: Readonly
   )
 }
 
+/**
+ * Mirrors AppShell's own route-change focus management (Important 7):
+ * the panel is appended at the bottom of the page, well past the wide
+ * signals table, so a keyboard user who just activated "Historial"
+ * would otherwise have to traverse the whole table again to reach it.
+ * Moving focus to the panel itself on mount — a real landmark (`role`
+ * implicit via `<section>`-like semantics is not needed here since the
+ * heading inside already orients the user) — puts a screen reader
+ * right where the new content starts, the same way AppShell lands on
+ * `main` after a route change.
+ */
 function HistoryPanel({ ticker, onClose }: { ticker: string; onClose: () => void }) {
   const today = new Date()
   const to = today.toISOString().slice(0, 10)
   const from = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const { data, isPending, isError, error, refetch } = useSignalHistory(ticker, from, to)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    panelRef.current?.focus()
+  }, [])
 
   return (
-    <Surface level={1} data-testid="signal-history-chart" className="flex flex-col gap-3 p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-fg-muted">
-          Historial de {ticker}
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-sm font-sans text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground"
-        >
-          Cerrar
-        </button>
-      </div>
-      {isPending && <LoadingState rows={2} />}
-      {isError && <ErrorState message={error instanceof Error ? error.message : undefined} onRetry={() => refetch()} />}
-      {!isPending && !isError && data.length === 0 && (
-        <EmptyState message="Todavía no hay historial persistido para este ticker." />
-      )}
-      {!isPending && !isError && data.length > 0 && (
-        <ul className="flex flex-col divide-y divide-border/60">
-          {SOURCES.map((source) => (
-            <SourceTrendRow key={source} source={source} history={data} />
-          ))}
-        </ul>
-      )}
-    </Surface>
+    <div ref={panelRef} tabIndex={-1} className="focus:outline-none">
+      <Surface level={1} data-testid="signal-history-chart" className="flex flex-col gap-3 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-fg-muted">
+            Historial de {ticker}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-sm font-sans text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground"
+          >
+            Cerrar
+          </button>
+        </div>
+        {isPending && <LoadingState rows={2} />}
+        {isError && (
+          <ErrorState message={error instanceof Error ? error.message : undefined} onRetry={() => refetch()} />
+        )}
+        {!isPending && !isError && data.length === 0 && (
+          <EmptyState message="Todavía no hay historial persistido para este ticker." />
+        )}
+        {!isPending && !isError && data.length > 0 && (
+          <ul className="flex flex-col divide-y divide-border/60">
+            {SOURCES.map((source) => (
+              <SourceTrendRow key={source} source={source} history={data} />
+            ))}
+          </ul>
+        )}
+      </Surface>
+    </div>
   )
 }
 
 export function Senales() {
   const { data, isPending, isError, error, refetch } = useSignalsDashboard()
   const [openedTicker, setOpenedTicker] = useState<string | null>(null)
+
   // Defaults to combined score descending — matching the API's own
   // order — as a real instruction, not an accident that merely holds
   // because the backend happens to pre-sort: sortSignals below always
@@ -335,6 +371,17 @@ export function Senales() {
     })
   }
 
+  // Looked up fresh by id rather than carried in a ref across renders
+  // (see TickerCell's doc comment) — Important 7: returns focus to the
+  // trigger instead of dropping it to <body>.
+  function handleCloseHistory() {
+    const ticker = openedTicker
+    setOpenedTicker(null)
+    if (ticker !== null) {
+      document.getElementById(`historial-trigger-${ticker}`)?.focus()
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
@@ -361,7 +408,7 @@ export function Senales() {
         density="dense"
         rowClassName={(signal) => (hasData(signal) ? '' : 'bg-surface-2/60')}
       />
-      {openedTicker !== null && <HistoryPanel ticker={openedTicker} onClose={() => setOpenedTicker(null)} />}
+      {openedTicker !== null && <HistoryPanel ticker={openedTicker} onClose={handleCloseHistory} />}
     </div>
   )
 }

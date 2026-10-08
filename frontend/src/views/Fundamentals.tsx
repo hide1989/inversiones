@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useFundamentals } from '../api/queries/fundamentals'
 import { formatDecimalString } from '../api/money'
 import { Surface } from '../design/primitives'
@@ -110,35 +111,49 @@ export interface FundamentalsPanelProps {
  * Fetched per ticker on demand — not a route, so it carries no view
  * heading of its own; the caller (Watchlist) supplies the surrounding
  * context and decides when to mount it.
+ *
+ * Focus management (Important 7, mirroring the identical fix in
+ * Senales' HistoryPanel and AppShell's own route-change pattern): this
+ * panel is appended at the bottom of the Watchlist table, so a keyboard
+ * user who just activated "Fundamentales" would otherwise have to
+ * traverse the whole table again to reach it. Focus moves to the panel
+ * itself on mount.
  */
 export function FundamentalsPanel({ ticker, onClose }: FundamentalsPanelProps) {
   const { data, isPending, isError, error, refetch } = useFundamentals(ticker)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    panelRef.current?.focus()
+  }, [])
 
   return (
-    <Surface level={1} data-testid="fundamentals-panel" className="flex flex-col gap-3 p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-fg-muted">
-          Fundamentales de {ticker}
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-sm font-sans text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground"
-        >
-          Cerrar
-        </button>
-      </div>
-      {isPending && <LoadingState rows={3} />}
-      {isError && (
-        <ErrorState
-          message={errorMessageFor(error instanceof Error ? error.message : undefined)}
-          onRetry={() => refetch()}
-        />
-      )}
-      {!isPending && !isError && !data.hasData && (
-        <EmptyState message={`No hay datos de fundamentales para ${ticker}.`} />
-      )}
-      {!isPending && !isError && data.hasData && <MetricGrid data={data} />}
-    </Surface>
+    <div ref={panelRef} tabIndex={-1} className="focus:outline-none">
+      <Surface level={1} data-testid="fundamentals-panel" className="flex flex-col gap-3 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-fg-muted">
+            Fundamentales de {ticker}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-sm font-sans text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground"
+          >
+            Cerrar
+          </button>
+        </div>
+        {isPending && <LoadingState rows={3} />}
+        {isError && (
+          <ErrorState
+            message={errorMessageFor(error instanceof Error ? error.message : undefined)}
+            onRetry={() => refetch()}
+          />
+        )}
+        {!isPending && !isError && !data.hasData && (
+          <EmptyState message={`No hay datos de fundamentales para ${ticker}.`} />
+        )}
+        {!isPending && !isError && data.hasData && <MetricGrid data={data} />}
+      </Surface>
+    </div>
   )
 }
