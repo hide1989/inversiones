@@ -34,3 +34,6 @@ jenkins/casc/secrets/
 *.iml
 .vscode/
 .DS_Store
+
+# Playwright MCP scratch output (console logs, page snapshots)
+.playwright-mcp/

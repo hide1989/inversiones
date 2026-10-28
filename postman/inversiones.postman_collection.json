@@ -1,0 +1,1162 @@
+{
+  "info": {
+    "name": "Inversiones — API local",
+    "description": "API del backend de inversiones (Java 25 / Spring Boot 4), arquitectura limpia.\n\n## Cómo empezar\n\n1. Levanta la base: `docker compose -f deploy/docker-compose.dev.yml up -d postgres`\n2. Levanta el backend con el puerto correcto:\n   `POSTGRES_PORT=5433 ./gradlew :app-service:bootRun`\n   El 5433 es obligatorio: el 5432 de esta máquina lo ocupa otro Postgres (pgvector),\n   y conectarse ahí produce `password authentication failed for user \"inversiones\"`.\n3. Ejecuta **Auth › Login**. Su script de prueba guarda el token en la variable de\n   colección `token`, y el resto de las peticiones lo heredan por Bearer.\n\n## Variables\n\n| Variable | Default | Para qué |\n|---|---|---|\n| `baseUrl` | `http://localhost:8080` | raíz del backend |\n| `token` | *(vacía)* | la llena Login automáticamente |\n| `transactionId` | `1` | id para PUT y DELETE (hay 1–26 sembrados) |\n| `ticker` | `QQQ` | ticker para historial y fundamentales |\n\n## Notas sobre el comportamiento real\n\n- **Los montos viajan como string decimal**, nunca como número JSON: un `double` de\n  JavaScript perdería la precisión que un `BigDecimal` fue elegido para conservar.\n  `quantity`, `unitPrice` y `fees` validan contra `^\\\\d+(\\\\.\\\\d+)?$`.\n- `POST /signals/refresh` tarda alrededor de **95 segundos**: consulta n8n para los 20\n  instrumentos. Súbele el timeout en Postman antes de ejecutarla.\n- `GET /fundamentals/{ticker}` pasa por un circuit breaker. Varias llamadas seguidas lo\n  abren y las siguientes responden 404 aunque el ticker exista. Dale unos segundos entre\n  intentos. Un ticker inexistente responde 200 con `hasData: true` y todas las métricas\n  nulas, así que no te fíes de esa bandera.\n- **Dos de las seis fuentes de señales no devuelven datos** hoy (`news` y `analyst`), así\n  que varios scores llegan nulos. Es estado del workflow, no de la API.\n- Las credenciales sembradas son públicas a propósito en este repositorio.\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "transactionId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "ticker",
+      "value": "QQQ",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Devuelve un JWT HS256. El script de prueba lo guarda en la variable `token`, así que basta ejecutar esta petición una vez para habilitar el resto.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"david\",\n  \"password\": \"Inversiones2026!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('trae token', () => pm.expect(b.token).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('token', b.token);",
+                  "console.log('Token guardado (' + b.token.length + ' caracteres)');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login — contraseña incorrecta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Caso negativo. Compara su cuerpo con el de «usuario inexistente»: son byte a byte idénticos a propósito, para que no se pueda enumerar qué usuarios existen.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"david\",\n  \"password\": \"contrasena-incorrecta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('cuerpo RFC 7807', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('title');",
+                  "  pm.expect(b).to.have.property('detail');",
+                  "  pm.expect(b).to.have.property('status');",
+                  "});",
+                  "pm.test('mensaje genérico, no revela la causa', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Invalid username or password');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login — usuario inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "El cuerpo debe ser idéntico al de la contraseña incorrecta. Si alguna vez difieren, se puede enumerar usuarios y eso es un hallazgo de seguridad.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"no-existe\",\n  \"password\": \"cualquiera\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('cuerpo RFC 7807', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('title');",
+                  "  pm.expect(b).to.have.property('detail');",
+                  "  pm.expect(b).to.have.property('status');",
+                  "});",
+                  "pm.test('idéntico al de contraseña incorrecta', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Invalid username or password');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login — cuerpo inválido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Valida la forma antes de intentar autenticar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"\",\n  \"password\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('cuerpo RFC 7807', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('title');",
+                  "  pm.expect(b).to.have.property('detail');",
+                  "  pm.expect(b).to.have.property('status');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Portafolio",
+      "item": [
+        {
+          "name": "Portafolio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "portfolio"
+              ]
+            },
+            "description": "Posiciones derivadas de las transacciones, con costo promedio ponderado y valoración a precio de hoy. `unpricedTickers` lista los que no se pudieron valorar."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('trae posiciones', () => pm.expect(b.positions).to.be.an('array').and.not.empty);",
+                  "pm.test('los montos son string, no número', () => {",
+                  "  pm.expect(b.totalInvested.amount).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retorno total",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/portfolio/returns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "portfolio",
+                "returns"
+              ]
+            },
+            "description": "Separa la ganancia por activos del efecto del tipo de cambio. Cuando la TRM no está disponible, `currencyEffectAvailable` es false y el efecto **no** debe leerse como cero: cero significaría «el cambio no movió nada», y la verdad sería «no lo sabemos»."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('declara si el efecto cambiario está disponible', () => {",
+                  "  pm.expect(b).to.have.property('currencyEffectAvailable');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "portfolio"
+              ]
+            },
+            "description": "La cadena de seguridad es default-deny: todo exige token salvo el login.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('cuerpo RFC 7807', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('title');",
+                  "  pm.expect(b).to.have.property('detail');",
+                  "  pm.expect(b).to.have.property('status');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Transacciones",
+      "item": [
+        {
+          "name": "Listar todas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions"
+              ]
+            },
+            "description": "Sin filtros devuelve las 26 sembradas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar con filtros",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions?ticker=QQQ&brokerName=Hapi&from=2026-01-01&to=2026-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "ticker",
+                  "value": "QQQ"
+                },
+                {
+                  "key": "brokerName",
+                  "value": "Hapi"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31"
+                }
+              ]
+            },
+            "description": "Los cuatro filtros son opcionales y se combinan. El filtrado ocurre en el servidor, no en el cliente."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('respeta el filtro de ticker', () => {",
+                  "  b.forEach(t => pm.expect(t.ticker).to.eql('QQQ'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar compra",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions"
+              ]
+            },
+            "description": "Nota los diez decimales en `quantity` y `unitPrice`: así llegan los datos reales de tus brokers, y es exactamente la precisión que un número JSON destruiría.\n\n`fees` es opcional. `type` acepta BUY o SELL; `currency`, USD o COP. Brokers válidos: ARQ, Hapi, Trii.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticker\": \"QQQ\",\n  \"brokerName\": \"Hapi\",\n  \"type\": \"BUY\",\n  \"quantity\": \"0.4863720000\",\n  \"unitPrice\": \"616.8118230490\",\n  \"currency\": \"USD\",\n  \"fees\": \"0.00\",\n  \"tradedAt\": \"2026-06-30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('devuelve la cantidad sin alterar la escala', () => {",
+                  "  pm.expect(b.quantity).to.eql('0.4863720000');",
+                  "});",
+                  "if (b.id) { pm.collectionVariables.set('transactionId', b.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar venta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions"
+              ]
+            },
+            "description": "Una venta retira acciones al costo promedio vigente. El backend rechaza vender más de lo que hay en esa posición.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticker\": \"QQQ\",\n  \"brokerName\": \"Hapi\",\n  \"type\": \"SELL\",\n  \"quantity\": \"0.1000000000\",\n  \"unitPrice\": \"616.8118230490\",\n  \"currency\": \"USD\",\n  \"fees\": \"0.00\",\n  \"tradedAt\": \"2026-06-30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Actualizar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions",
+                "{{transactionId}}"
+              ]
+            },
+            "description": "Usa la variable `transactionId`, que «Registrar compra» deja apuntando a la última creada. Cambiar el instrumento de una transacción existente se rechaza.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticker\": \"QQQ\",\n  \"brokerName\": \"Hapi\",\n  \"type\": \"BUY\",\n  \"quantity\": \"0.5000000000\",\n  \"unitPrice\": \"616.8118230490\",\n  \"currency\": \"USD\",\n  \"fees\": \"0.00\",\n  \"tradedAt\": \"2026-06-30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions/{{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions",
+                "{{transactionId}}"
+              ]
+            },
+            "description": "Devuelve 204 sin cuerpo. Borra de verdad: apunta `transactionId` a algo que puedas perder."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Validación — cuerpo inválido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions"
+              ]
+            },
+            "description": "Devuelve 400 con un arreglo `errors` que nombra cada campo. Útil para ver el contrato de validación completo de una sola vez.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticker\": \"\",\n  \"brokerName\": \"Hapi\",\n  \"type\": \"BUY\",\n  \"quantity\": \"-5\",\n  \"tradedAt\": \"2030-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('cuerpo RFC 7807', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('title');",
+                  "  pm.expect(b).to.have.property('detail');",
+                  "  pm.expect(b).to.have.property('status');",
+                  "});",
+                  "pm.test('nombra los campos que fallaron', () => {",
+                  "  pm.expect(pm.response.json().errors).to.be.an('array').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Regla de negocio — fecha futura",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions"
+              ]
+            },
+            "description": "La fecha futura es una regla de negocio del backend, no de forma, así que se rechaza aquí y no en la validación de esquema. El cliente no la duplica.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticker\": \"QQQ\",\n  \"brokerName\": \"Hapi\",\n  \"type\": \"BUY\",\n  \"quantity\": \"0.4863720000\",\n  \"unitPrice\": \"616.8118230490\",\n  \"currency\": \"USD\",\n  \"fees\": \"0.00\",\n  \"tradedAt\": \"2099-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('cuerpo RFC 7807', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('title');",
+                  "  pm.expect(b).to.have.property('detail');",
+                  "  pm.expect(b).to.have.property('status');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Señales",
+      "item": [
+        {
+          "name": "Tablero",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/signals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "signals"
+              ]
+            },
+            "description": "Un score combinado por ticker más los scores por fuente. `usedSources` dice de cuáles se calculó: si viene vacío, el ticker no tiene datos y su score no debe leerse como un cero medido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('declara las fuentes usadas por ticker', () => {",
+                  "  if (b.signals && b.signals.length) {",
+                  "    pm.expect(b.signals[0].score).to.have.property('usedSources');",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Historial de un ticker",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/signals/history?ticker={{ticker}}&from=2026-09-01&to=2026-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "signals",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "ticker",
+                  "value": "{{ticker}}"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-09-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31"
+                }
+              ]
+            },
+            "description": "Los tres parámetros son obligatorios. Sirve para ver la evolución de un score; hay snapshots sembrados de varios días."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forzar refresco",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/signals/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "signals",
+                "refresh"
+              ]
+            },
+            "description": "**Tarda unos 95 segundos** — consulta n8n para los 20 instrumentos. Súbele el timeout en Postman (Settings › Request timeout) antes de ejecutarla.\n\nDevuelve `snapshotsStored`. Un guardia de concurrencia impide que dos refrescos corran a la vez: si lanzas uno mientras otro está en vuelo, el segundo responde **409**, no un 200 que mentiría diciendo que hubo refresco."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('informa cuántos snapshots guardó', () => {",
+                  "  pm.expect(pm.response.json().snapshotsStored).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mercado",
+      "item": [
+        {
+          "name": "Diversificación",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/diversification",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "diversification"
+              ]
+            },
+            "description": "Tres techos de concentración: 20% por acción, 25% por fondo, 30% por sector. Los pesos vienen como porcentaje en string. `violations` trae el techo incumplido con su valor permitido; para un ticker que cumple, la respuesta no dice cuál de los dos techos le aplica."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('trae la bandera de cumplimiento', () => pm.expect(b).to.have.property('compliant'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Síntesis IA",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ai-synthesis",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ai-synthesis"
+              ]
+            },
+            "description": "Separa los tickers con datos de los que no. **`averageScore` se calcula solo sobre `withData`**: si ese arreglo está vacío el promedio llega en `0.00` y no significa «puntúa cero», significa que no hay nada que promediar. Hoy la tabla está vacía, así que verás los 15 tickers en `withoutData`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('distingue con datos de sin datos', () => {",
+                  "  pm.expect(b).to.have.property('withData');",
+                  "  pm.expect(b).to.have.property('withoutData');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Earnings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/earnings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "earnings"
+              ]
+            },
+            "description": "Ordenados por proximidad. El workflow WF-13 de n8n devuelve vacío hoy, así que esperá un arreglo `[]` — es el estado real, no un fallo de la API."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Watchlist",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/watchlist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "watchlist"
+              ]
+            },
+            "description": "Unas 32 filas. Varios `price` y `technicalScore` llegan **nulos** — el adaptador lo documenta como comportamiento esperado del upstream. Las señales vienen en español (COMPRA, FUERTE COMPRA, MANTENER, VENTA), vocabulario distinto al BUY/HOLD del resto del contrato."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('es un arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fundamentales de un ticker",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fundamentals/{{ticker}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fundamentals",
+                "{{ticker}}"
+              ]
+            },
+            "description": "Bajo demanda por ticker. Tres estados posibles, y conviene distinguirlos:\n\n1. **200 con `hasData: true`** y métricas presentes.\n2. **200 con `hasData: true` y todas las métricas nulas** — pasa con un ticker inexistente, así que esa bandera no es confiable; mirá métrica por métrica.\n3. **404** — puede ser un ticker irresoluble, pero también el circuit breaker abierto tras varias llamadas seguidas. El mensaje dice «Could not resolve ticker» en ambos casos, que nombra mal la segunda causa.\n\nPara un ETF, `isEtf` es true y la mayoría de los múltiplos llegan nulos: no hay P/E significativo para un fondo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.test('declara isEtf y hasData', () => {",
+                  "    pm.expect(b).to.have.property('isEtf');",
+                  "    pm.expect(b).to.have.property('hasData');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Diagnóstico",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Incluye los grupos liveness y readiness. Público.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "info"
+              ]
+            },
+            "description": "Metadatos de la build.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Métricas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "metrics"
+              ]
+            },
+            "description": "Catálogo de métricas de Micrometer.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/no-existe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "no-existe"
+              ]
+            },
+            "description": "Confirma que un 404 también llega como ProblemDetail y no como una página de error."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
