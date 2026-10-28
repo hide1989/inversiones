@@ -12,7 +12,7 @@ backend/.kotlin/
 !backend/gradle/wrapper/gradle-wrapper.jar
 
 # Node
-frontend/node_modules/
+node_modules/
 frontend/dist/
 frontend/coverage/
 frontend/playwright-report/
