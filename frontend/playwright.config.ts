@@ -22,6 +22,12 @@ const BASE_URL = `http://localhost:${PREVIEW_PORT}`
 
 export default defineConfig({
   testDir: './e2e',
+  // Checks the two environment preconditions this suite cannot verify for itself: that the server
+  // on the preview port is the production build rather than a forgotten `npm run dev` (which
+  // `reuseExistingServer` below would otherwise adopt silently), and that the backend is up. Both
+  // failures would otherwise look like a passing suite or like dozens of unrelated network
+  // errors. See e2e/global-setup.ts for why each one is worth a check rather than a README note.
+  globalSetup: './e2e/global-setup.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
