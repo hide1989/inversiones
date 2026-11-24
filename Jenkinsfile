@@ -101,16 +101,36 @@ PY
     }
 
     stage('Acceptance Tests') {
+      environment {
+        // POSTGRES_PORT is supplied here because deploy/.env is git-ignored and therefore ABSENT
+        // from the checkout Jenkins makes. Without it the dev compose falls back to publishing
+        // 5432, which on this host belongs to an unrelated pgvector container, and the stage dies
+        // instantly with "driver failed programming external connectivity". A high port avoids
+        // collisions with anything a developer happens to be running.
+        POSTGRES_PORT = '55432'
+        // The browser and the tests run INSIDE the Jenkins container, where localhost:8080 is
+        // Jenkins itself — the composed backend is a sibling publishing on the HOST. Both of these
+        // point at the address that actually reaches it, verified from inside this container to
+        // resolve to 192.168.65.254 and accept connections.
+        //
+        // The browser's ORIGIN stays http://localhost:5173 (the preview server, in-container), so
+        // the backend's CORS allowlist needs no change.
+        E2E_BACKEND_URL = 'http://host.docker.internal:8080'
+        VITE_API_BASE_URL = 'http://host.docker.internal:8080'
+      }
       steps {
         sh 'docker compose -f deploy/docker-compose.dev.yml up -d --wait'
         dir('backend') {
+          // The Cucumber suite uses Testcontainers and WireMock, so it does not need the stack
+          // above — that is brought up for the Playwright flows, which talk to the real API.
           // acceptanceTest declares outputs.upToDateWhen { false }, so it always re-runs.
           sh './gradlew --no-daemon :app-service:acceptanceTest'
         }
         dir('frontend') {
           sh 'npx playwright install --with-deps chromium webkit'
           // e2e/global-setup.ts refuses to run against a dev server left on port 5173, and against
-          // a backend that is not up. Both would otherwise pass while testing the wrong thing.
+          // a backend that is not answering at E2E_BACKEND_URL. Both would otherwise pass while
+          // testing the wrong thing.
           sh 'npm run e2e'
         }
       }
