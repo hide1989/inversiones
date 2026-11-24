@@ -64,7 +64,12 @@ subprojects {
     }
 
     jacocoTestReport {
-        dependsOn test, 'pitest'
+        // 'pitest' is deliberately not a dependency here either. This per-module coupling is the
+        // second half of the same mistake as jacocoMergedReport's: with `test.finalizedBy(
+        // jacocoTestReport)` on line 45, every module's test run pulled mutation analysis in
+        // behind it. Removing only the aggregate dependency was not enough — PIT still ran 41
+        // times in CI and the agent was still OOM-killed, which is how this one was found.
+        dependsOn test
         reports {
             xml.setRequired true
             xml.setOutputLocation layout.buildDirectory.file("reports/jacoco.xml")
