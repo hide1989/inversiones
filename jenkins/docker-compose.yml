@@ -1,0 +1,80 @@
+# Jenkins for this project, configured entirely as code so the same setup reproduces on the Mac and
+# later on the VPS. Nothing here is clicked.
+#
+# Port 8090, not 8080: the backend owns 8080 on this machine, and the pipeline starts the backend.
+#
+# The repository is MOUNTED and used as the job's SCM over a file:// URL, because this repository
+# has no git remote — verified, `git remote` lists none. The plan assumed a GitHub URL and a `main`
+# branch; neither exists (the branches are master and feat/backend-domain-core). A local SCM
+# validates the pipeline end to end without needing an account, which is exactly the scope chosen
+# for this plan. docs/runbook-vps.md covers swapping it for a real remote and a webhook.
+#
+# ALLOW_LOCAL_CHECKOUT is needed because the git plugin refuses a file:// remote by default: a
+# local checkout could reference any path the Jenkins process can read, so it is blocked unless
+# explicitly allowed. Acceptable here and only here — a single-developer CI host whose "local
+# directory" is this project's own repository, mounted read-only. On the VPS the SCM is a real
+# remote and this flag should come back out.
+#
+# The Docker socket is mounted because the pipeline builds images and runs compose stacks. That is
+# root-equivalent control of this machine's Docker daemon — acceptable for a single-developer CI
+# host, and not for a shared one.
+
+services:
+  jenkins:
+    # Built, not pulled: the plugins have to be installed at image-build time. See Dockerfile.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: inversiones-jenkins:lts-jdk25
+    container_name: inversiones-jenkins
+    restart: unless-stopped
+    # 4 GB, not 2. At 2 GB the container was OOM-killed mid-build: docker's event stream recorded
+    # `oom` followed by `die` and `start`, and the pipeline reported "exit code -1" with a
+    # "Resuming build after Jenkins restart" line — a killed process, not a failed build. Note that
+    # `docker inspect` said OOMKilled=false, because that field describes the LATEST start rather
+    # than the one that died; the event stream is what tells the truth.
+    #
+    # The builds run INSIDE this container rather than as sibling agents, so its limit has to cover
+    # Gradle plus the JVMs PIT forks for 42 mutation units. A sibling-agent architecture would keep
+    # this container small, and is the right change if this grows — out of scope for this plan.
+    mem_limit: 4g
+    environment:
+      JAVA_OPTS: >-
+        -Djenkins.install.runSetupWizard=false
+        -Dhudson.model.DirectoryBrowserSupport.CSP=
+        -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true
+      CASC_JENKINS_CONFIG: /var/jenkins_conf/jenkins.yaml
+      JENKINS_ADMIN_ID: ${JENKINS_ADMIN_ID:-admin}
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?set JENKINS_ADMIN_PASSWORD in jenkins/.env}
+      # The mount point below, as a git URL. Overridable so the VPS can point at a real remote.
+      INVERSIONES_REPO_URL: ${INVERSIONES_REPO_URL:-file:///repo}
+      INVERSIONES_BRANCH: ${INVERSIONES_BRANCH:-feat/backend-domain-core}
+      # Git refuses to read a repository owned by another uid ("detected dubious ownership"), and
+      # the mounted repo belongs to the host user while this container runs as root. These three
+      # variables are git's own way to inject config without writing a file.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+      # Testcontainers runs INSIDE this container but starts its containers as SIBLINGS on the
+      # host, which publish ports there. By default it then tries to reach them at the bridge
+      # gateway, 172.17.0.1 — and on Docker Desktop that address is not reachable from inside a
+      # container. The six Testcontainers-backed test classes all failed with "Could not connect
+      # to Ryuk at 172.17.0.1:<port>" until this was set.
+      #
+      # host.docker.internal is the address that works: verified to resolve to 192.168.65.254 from
+      # inside this container and to accept a connection, where 172.17.0.1 has no name at all.
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    ports:
+      - "${JENKINS_PORT:-8090}:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./casc:/var/jenkins_conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Read-only: Jenkins clones FROM this path into its own workspace and must never write back
+      # to the developer's working tree.
+      - ../:/repo:ro
+    user: root
+
+volumes:
+  jenkins_home:

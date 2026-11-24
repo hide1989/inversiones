@@ -1,0 +1,79 @@
+# Jenkins Configuration as Code: everything Jenkins needs to run this project's pipeline, with no
+# manual setup step. Secrets are read from the environment, never written here.
+jenkins:
+  systemMessage: "Inversiones CI — configured as code from jenkins/casc/jenkins.yaml"
+  numExecutors: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+
+unclassified:
+  location:
+    url: "http://localhost:8090/"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          # Placeholders so a `local` deploy works out of the box. A withCredentials block fails
+          # the build when its credential id does not exist AT ALL, so declaring all five here
+          # means choosing `vps` fails on the real missing thing — the account behind it — rather
+          # than on a missing credential id.
+          - string:
+              scope: GLOBAL
+              id: "inversiones-jwt-secret"
+              secret: "${JWT_SECRET_CI:-ci-placeholder-secret-at-least-32-bytes}"
+              description: "JWT signing secret used by the deploy stages"
+          - string:
+              scope: GLOBAL
+              id: "inversiones-postgres-password"
+              secret: "${POSTGRES_PASSWORD_CI:-inversiones_local}"
+              description: "Postgres password used by the deploy stages"
+          - string:
+              scope: GLOBAL
+              id: "inversiones-backend-host"
+              secret: "${BACKEND_HOST_CI:-api.srv1449561.hstgr.cloud}"
+              description: "Hostname Traefik routes to the backend. Only the vps target reads it."
+          - string:
+              scope: GLOBAL
+              id: "inversiones-allowed-origins"
+              secret: "${ALLOWED_ORIGINS_CI:-https://replace-me.vercel.app}"
+              description: "Exact origin of the deployed frontend, no wildcard. Only vps reads it."
+          - string:
+              scope: GLOBAL
+              id: "vercel-token"
+              secret: "${VERCEL_TOKEN_CI:-replace-me-no-vercel-account-yet}"
+              description: "Vercel deploy token. No account exists yet; see docs/runbook-vps.md"
+
+jobs:
+  - script: |
+      pipelineJob('inversiones') {
+        description('Build, test and deploy the inversiones project. The deploy target is a parameter.')
+        parameters {
+          choiceParam('DEPLOY_TARGET', ['none', 'local', 'vps'],
+            'none: build and test only. local: compose up on this host. vps: remote Docker over SSH.')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url(System.getenv('INVERSIONES_REPO_URL')) }
+                branch(System.getenv('INVERSIONES_BRANCH'))
+                extensions {}
+              }
+            }
+            scriptPath('Jenkinsfile')
+            lightweight(false)
+          }
+        }
+        // Polling, not a webhook: a laptop has no public IP for GitHub to reach, and this job's
+        // SCM is a local path anyway. The VPS phase replaces this with a real webhook — see
+        // docs/runbook-vps.md.
+        triggers {
+          scm('H/15 * * * *')
+        }
+      }

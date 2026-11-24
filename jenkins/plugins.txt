@@ -1,0 +1,13 @@
+configuration-as-code
+workflow-aggregator
+job-dsl
+git
+github
+docker-workflow
+pipeline-stage-view
+junit
+jacoco
+htmlpublisher
+credentials-binding
+timestamper
+ws-cleanup
