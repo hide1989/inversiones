@@ -46,9 +46,6 @@ echo "Layer 1 — the guards must be present"
 
 # Gradle reports "BUILD SUCCESSFUL" from up-to-date tasks without running a single test.
 need "gradle build forces a real run (--rerun-tasks)" -- '--rerun-tasks'
-# `build` depends transitively on the PIT aggregate task, which the configuration cache cannot
-# serialise; without this the stage fails on a green tree.
-need "gradle runs with --no-configuration-cache" -- '--no-configuration-cache'
 # With allowEmptyResults: true, a build whose tests never ran publishes nothing and goes green.
 need "an empty JUnit result set fails the build" -- 'allowEmptyResults: false'
 # vitest prints "Tests N passed" even when a whole file failed to compile, and emits ANSI escapes
@@ -71,7 +68,6 @@ echo
 echo "Layer 1b — every published report path exists after a real build"
 for p in \
   "backend/build/reports/jacocoMergedReport/html/index.html" \
-  "backend/build/reports/pitest/index.html" \
   "backend/applications/app-service/build/reports/cucumber/report.html"
 do
   if [ -f "$ROOT/$p" ]; then

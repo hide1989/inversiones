@@ -81,7 +81,22 @@ jacoco {
 }
 
 tasks.register('jacocoMergedReport', JacocoReport) {
-    dependsOn = [test, subprojects.jacocoTestReport, pitestReportAggregate]
+    // pitestReportAggregate is deliberately NOT a dependency. A line-coverage report has no reason
+    // to require mutation analysis, and that coupling was the single cause of three separate
+    // problems, since `check` depends on jacocoMergedCoverageVerification which depends on this:
+    //
+    //   1. `./gradlew build` could not use Gradle's configuration cache at all — the PIT plugin's
+    //      AggregateReportTask cannot be serialised ("error writing value of type
+    //      DefaultConfigurableFileCollection"), so every build needed --no-configuration-cache.
+    //   2. The CI agent was OOM-killed twice, at 2 GB and again at 4 GB. PIT forks a JVM per
+    //      mutation unit and each sizes its heap from the container limit, so raising the limit
+    //      enlarges the children too and never converges.
+    //   3. Every `build` paid 13 minutes for mutation analysis that gates nothing: there is no
+    //      mutationThreshold configured, so PIT produces a report and the build passes regardless.
+    //
+    // PIT remains available on its own: `./gradlew pitest` per module, or `pitestReportAggregate`
+    // for the merged report. Run it deliberately, or on a schedule, rather than on every build.
+    dependsOn = [test, subprojects.jacocoTestReport]
     additionalSourceDirs.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
     sourceDirectories.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
     classDirectories.setFrom files(subprojects.sourceSets.main.output)

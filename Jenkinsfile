@@ -42,16 +42,14 @@ pipeline {
           // up-to-date" and the tests never run, which is indistinguishable from a pass. This bit
           // during Task 1 of this very plan.
           //
-          // --no-configuration-cache: `build` depends on jacocoMergedReport, which depends on the
-          // PIT plugin's :pitestReportAggregate, which Gradle's configuration cache cannot
-          // serialise ("error writing value of type DefaultConfigurableFileCollection"). PROVEN
-          // pre-existing by stashing every source change and reproducing it. Without this flag the
-          // stage fails on a green tree.
-          //
           // `build` already runs validateStructure (compileJava.dependsOn) and the merged 80%
           // coverage gate (check.dependsOn jacocoMergedCoverageVerification), so neither needs
-          // naming here.
-          sh './gradlew --no-daemon --rerun-tasks --no-configuration-cache build'
+          // naming here. It no longer runs PIT: jacocoMergedReport used to depend on
+          // pitestReportAggregate, which made every build pay 13 minutes for mutation analysis
+          // that gates nothing, broke Gradle's configuration cache, and OOM-killed this agent at
+          // both 2 GB and 4 GB. That dependency is gone (see backend/main.gradle), so this is now
+          // a one-minute build with the configuration cache working.
+          sh './gradlew --no-daemon --rerun-tasks build'
         }
       }
       post {
@@ -106,9 +104,8 @@ PY
       steps {
         sh 'docker compose -f deploy/docker-compose.dev.yml up -d --wait'
         dir('backend') {
-          // acceptanceTest declares outputs.upToDateWhen { false }, so it always re-runs; the
-          // configuration-cache flag is still needed for the reasons above.
-          sh './gradlew --no-daemon --no-configuration-cache :app-service:acceptanceTest'
+          // acceptanceTest declares outputs.upToDateWhen { false }, so it always re-runs.
+          sh './gradlew --no-daemon :app-service:acceptanceTest'
         }
         dir('frontend') {
           sh 'npx playwright install --with-deps chromium webkit'
@@ -135,11 +132,9 @@ PY
           reportFiles: 'index.html', reportName: 'JaCoCo (merged)',
           keepAll: true, alwaysLinkToLastBuild: true, allowMissing: false
         ])
-        publishHTML(target: [
-          reportDir: 'backend/build/reports/pitest',
-          reportFiles: 'index.html', reportName: 'PIT (mutation)',
-          keepAll: true, alwaysLinkToLastBuild: true, allowMissing: false
-        ])
+        // No PIT report here: the pipeline no longer runs mutation analysis, so publishing it
+        // would show whatever a previous manual run left behind, or nothing. Run
+        // `./gradlew pitestReportAggregate` deliberately and read it locally.
         publishHTML(target: [
           reportDir: 'backend/applications/app-service/build/reports/cucumber',
           reportFiles: 'report.html', reportName: 'Cucumber',
