@@ -1,7 +1,14 @@
 spring:
   datasource:
+    # Development defaults only. The url's shape lives in application.yml; these two lines supply
+    # the values that application.yml deliberately leaves without one, so `./gradlew bootRun` and
+    # the dev compose stack need no setup step.
+    #
+    # POSTGRES_PORT stays overridable and matters on this machine: the dev compose maps Postgres to
+    # 5433 because an unrelated container holds 5432, so `POSTGRES_PORT=5433 ./gradlew bootRun` is
+    # the working invocation. Note that a Gradle daemon started before that variable existed will
+    # not see it — use --no-daemon, or stop the daemon, if it appears not to take effect.
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:inversiones}
-    username: ${POSTGRES_USER:inversiones}
     password: ${POSTGRES_PASSWORD:inversiones_local}
 
 inversiones:

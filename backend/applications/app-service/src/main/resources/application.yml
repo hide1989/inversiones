@@ -10,6 +10,21 @@ spring:
       enabled: true
   devtools:
     add-properties: false
+  datasource:
+    # The connection lives here, not in a profile, so every profile can connect.
+    # application-local.yml supplies the development defaults by overriding only what differs.
+    #
+    # Placing this in the profile instead left any non-local profile with NO datasource at all, so
+    # the failure surfaced wherever Hikari or Flyway first asked for a connection rather than at the
+    # configuration that was missing.
+    #
+    # POSTGRES_HOST and POSTGRES_PASSWORD deliberately carry no default: a deployment that forgets
+    # either must fail at startup rather than quietly target localhost with a guessable password.
+    # POSTGRES_PORT and POSTGRES_DB do have defaults, because the standard port and the database
+    # name are not secrets and getting them wrong fails loudly on connect.
+    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT:5432}/${POSTGRES_DB:inversiones}
+    username: ${POSTGRES_USER:inversiones}
+    password: ${POSTGRES_PASSWORD}
   jpa:
     open-in-view: false
     hibernate:
