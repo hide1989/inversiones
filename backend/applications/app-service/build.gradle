@@ -73,6 +73,10 @@ tasks.register('acceptanceTest', Test) {
     // rather than duplicated here, so the acceptance layer and the adapter layer cannot drift.
     systemProperty 'fixtures.n8n.dir',
             file('../../infrastructure/driven-adapters/rest-consumer/src/test/resources/n8n').absolutePath
+    // The Cucumber HTML report is configured on RunCucumberTest's @ConfigurationParameter, NOT
+    // here: a @ConfigurationParameter on the @Suite class takes precedence over system properties,
+    // so a `systemProperty 'cucumber.plugin'` set here is silently ignored. That was tried first
+    // and produced no report while the build stayed green.
     // Deliberately not wired into `test` or `check` (see the source-set comment above).
     shouldRunAfter test
     outputs.upToDateWhen { false }
