@@ -265,3 +265,63 @@ finding; not Task 12's to fix.
 
 A UI consequence worth naming: fundamentals is a per-ticker on-demand panel, so opening several
 tickers in a row — the natural way to use it — is exactly the access pattern that trips the breaker.
+
+## A cache stampede on the quote cache, found by load testing
+
+**Production defect, not a test artefact.** Recorded here because it was discovered by measurement
+and would not have been found by any unit or integration test — it only appears under concurrency.
+
+`GetPortfolioUseCase` reads quotes through `QuoteCacheSource`, annotated `@Cacheable` over Caffeine
+with `expireAfterWrite(5 minutes)`. Spring's `@Cacheable` **does not coalesce concurrent loaders by
+default**: when the entry expires and many requests arrive in the same instant, every one of them
+misses, and every one calls n8n, because none has finished populating the entry yet.
+
+A cache makes sequential traffic cheap. It does nothing for a simultaneous burst at the moment of
+expiry.
+
+**Observed.** A k6 stress scenario reaching 224 requests/second against `/portfolio` produced **524
+failed n8n calls** and opened three circuit breakers:
+
+```
+257  CircuitBreaker 'bvc-precios'    is OPEN
+250  CircuitBreaker 'precios-hoy'    is OPEN
+  2  CircuitBreaker 'news-sentiment' is OPEN
+```
+
+The p99 latency went from 61 ms to 30,514 ms in the same ramp step — requests waiting on outbound
+n8n calls that were timing out.
+
+**Why it matters in production.** With a single user it never shows. With several concurrent users,
+every five minutes — whenever the quotes entry expires — the burst hits n8n simultaneously. That is
+a periodic, self-inflicted denial of service against this application's own data pipeline, and the
+circuit breakers then serve degraded data for minutes afterwards.
+
+**Not fixed.** The remedy is to coalesce the loaders so one request populates the entry and the rest
+wait on it, rather than all calling upstream. Caffeine supports this natively through
+`AsyncLoadingCache` or a synchronous `LoadingCache` built with `.build(loader)`, whose `get(key,
+mappingFunction)` holds concurrent callers for the same key. Spring's `@Cacheable` with `sync = true`
+is the smaller change and is the obvious first thing to try. Either way it needs its own test: a
+concurrency test asserting that N simultaneous misses produce exactly ONE upstream call.
+
+Deferred rather than fixed because it is outside the performance-testing deliverable's scope and
+touches a path with its own resilience configuration.
+
+## Classifying an endpoint as safe to load-test requires the transitive dependency closure
+
+Two wrong classifications in a row, both from checking one level deep, cost two rounds of stray
+n8n calls.
+
+First attempt: `/portfolio` was called safe because its n8n calls are cached. The stampede above
+disproved it.
+
+Second attempt: safety was redefined as "the use case holds zero `*Provider` references", and
+`EvaluateDiversificationUseCase` was measured as holding zero — correctly, because it holds none. It
+depends on `GetPortfolioUseCase`, which holds two. Concentration weights need market values, and
+market values need quotes.
+
+**The rule: an endpoint is safe to load-test only if the TRANSITIVE CLOSURE of its use case's
+dependencies contains no gateway to an external system.** Checking one level is not checking.
+
+Applying it leaves exactly two measurable endpoints — `GET /transactions` and `GET /signals` — which
+is a small surface and the honest one: those are where this project's own code is the only thing
+being timed. `perf/lib/endpoints.js` carries the full derivation.
