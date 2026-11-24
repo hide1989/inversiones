@@ -1,0 +1,116 @@
+# Production stack for the Hostinger VPS, deployed to /docker/inversiones alongside the /docker/n8n
+# and /docker/social-autopost stacks already there.
+#
+# Two properties of that machine shaped this file. Both were verified on it over SSH rather than
+# assumed, and both are the kind of thing that is invisible until it causes an outage.
+#
+#   1. It has 7.8 GB of RAM, 5.2 GB available, 2 CPUs, and NO SWAP. None of the seven containers
+#      already running declares a memory limit. The backend image sets -XX:MaxRAMPercentage=75,
+#      which sizes the heap from the CONTAINER's cgroup limit — so with no limit the JVM targets
+#      75% of the host's 7.8 GB, about 5.9 GB, and with no swap the kernel kills a process to
+#      reclaim it. The likely victim is n8n, which is this application's only source of market
+#      data: deploying the consumer would take down its own supply. Hence mem_limit on both
+#      services, and the post-deploy check in docs/runbook-vps.md that confirms the JVM sized its
+#      heap from the container rather than the host.
+#
+#   2. Traefik already runs there as n8n-traefik-1 on the n8n_default network, owning :80 and :443
+#      with a Let's Encrypt resolver named mytlschallenge. This stack joins that network and routes
+#      by label rather than adding a second reverse proxy and a second certificate to renew. Traefik
+#      runs with --providers.docker.exposedbydefault=false, so traefik.enable=true is required, not
+#      decorative.
+#
+# DNS needs no change: *.srv1449561.hstgr.cloud is a wildcard pointing at the VPS, so any subdomain
+# resolves there already.
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: deployment/Dockerfile
+    # Tagged with the commit so a running container is traceable to the code in it. A floating
+    # `latest` makes "which version is deployed?" unanswerable.
+    image: inversiones-backend:${IMAGE_TAG:-latest}
+    container_name: inversiones-backend
+    restart: unless-stopped
+    # 1 GB gives the JVM a ~750 MB heap at MaxRAMPercentage=75, which this workload fits in with
+    # room to spare, and leaves the rest of the machine to n8n and the social stack.
+    mem_limit: 1g
+    # Equal to mem_limit so the container cannot fall back on swap. The host has none anyway; this
+    # makes that explicit rather than implicit, and turns an over-allocation into a container OOM
+    # — which restarts one service — instead of host memory pressure, which kills whatever the
+    # kernel picks.
+    memswap_limit: 1g
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-inversiones}
+      POSTGRES_USER: ${POSTGRES_USER:-inversiones}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-480}
+      # The deployed frontend's exact origin. Wrong or missing, the browser reports an opaque CORS
+      # failure and this API logs nothing wrong, so it is required rather than defaulted.
+      SECURITY_ALLOWED_ORIGINS: ${SECURITY_ALLOWED_ORIGINS:?SECURITY_ALLOWED_ORIGINS is required}
+      # n8n is reachable inside the VPS by container name, so this traffic never leaves the host.
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://n8n:5678/webhook/inv}
+      N8N_SLOW_READ_TIMEOUT: ${N8N_SLOW_READ_TIMEOUT:-90s}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+      - traefik
+    labels:
+      traefik.enable: "true"
+      # Named explicitly because this container sits on two networks and Traefik would otherwise
+      # have to guess which one to reach it on.
+      traefik.docker.network: n8n_default
+      traefik.http.routers.inversiones.rule: Host(`${BACKEND_HOST:?BACKEND_HOST is required}`)
+      traefik.http.routers.inversiones.entrypoints: "web,websecure"
+      traefik.http.routers.inversiones.tls: "true"
+      traefik.http.routers.inversiones.tls.certresolver: mytlschallenge
+      traefik.http.services.inversiones.loadbalancer.server.port: "8080"
+      # Mirrors the header middleware n8n already uses on this same Traefik.
+      traefik.http.routers.inversiones.middlewares: inversiones@docker
+      traefik.http.middlewares.inversiones.headers.contentTypeNosniff: "true"
+      traefik.http.middlewares.inversiones.headers.browserXSSFilter: "true"
+      traefik.http.middlewares.inversiones.headers.forceSTSHeader: "true"
+      traefik.http.middlewares.inversiones.headers.STSSeconds: "31536000"
+      traefik.http.middlewares.inversiones.headers.STSIncludeSubdomains: "true"
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: inversiones-postgres
+    restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-inversiones}
+      POSTGRES_USER: ${POSTGRES_USER:-inversiones}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    # No `ports:` block, deliberately. The dev compose publishes 5432 so pgAdmin can reach it from
+    # the host; doing that here would expose the database to the internet. Only the backend needs
+    # it, and it reaches it over the internal network by service name.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-inversiones} -d ${POSTGRES_DB:-inversiones}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - internal
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+    driver: bridge
+  traefik:
+    # Created and owned by the n8n stack. Referenced, never created, so `compose down` here can
+    # never take Traefik's network out from under n8n.
+    name: n8n_default
+    external: true
