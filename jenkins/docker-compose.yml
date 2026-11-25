@@ -5,7 +5,8 @@
 #
 # The repository is MOUNTED and used as the job's SCM over a file:// URL, because this repository
 # has no git remote — verified, `git remote` lists none. The plan assumed a GitHub URL and a `main`
-# branch; neither exists (the branches are master and feat/backend-domain-core). A local SCM
+# branch; neither exists. The work was developed on feat/backend-domain-core, which was fast-forward
+# merged into master and deleted on 2026-11-25, so master is now the only branch. A local SCM
 # validates the pipeline end to end without needing an account, which is exactly the scope chosen
 # for this plan. docs/runbook-vps.md covers swapping it for a real remote and a webhook.
 #
@@ -48,7 +49,7 @@ services:
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?set JENKINS_ADMIN_PASSWORD in jenkins/.env}
       # The mount point below, as a git URL. Overridable so the VPS can point at a real remote.
       INVERSIONES_REPO_URL: ${INVERSIONES_REPO_URL:-file:///repo}
-      INVERSIONES_BRANCH: ${INVERSIONES_BRANCH:-feat/backend-domain-core}
+      INVERSIONES_BRANCH: ${INVERSIONES_BRANCH:-master}
       # Git refuses to read a repository owned by another uid ("detected dubious ownership"), and
       # the mounted repo belongs to the host user while this container runs as root. These three
       # variables are git's own way to inject config without writing a file.
