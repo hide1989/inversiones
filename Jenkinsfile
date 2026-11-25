@@ -176,7 +176,17 @@ PY
           // e2e/global-setup.ts refuses to run against a dev server left on port 5173, and against
           // a backend that is not answering at E2E_BACKEND_URL. Both would otherwise pass while
           // testing the wrong thing.
-          sh 'npm run e2e'
+          //
+          // CI=true is load-bearing and was missing. Jenkins does not set it (GitHub Actions does),
+          // so every `process.env.CI` branch in playwright.config.ts had never once been active
+          // here: forbidOnly was off, retries stayed at 0, and `workers` fell back to half the
+          // visible CPUs — four browsers at a time inside a 4 GB container. Build #13 was killed
+          // (exit code -1, Jenkins restarted mid-build) at exactly the moment Cucumber finished
+          // and Playwright started, with 11 scenarios and 66 steps green and no e2e test having
+          // run. Capping workers at 1 reduces the demand instead of raising the ceiling, which is
+          // the lesson the PIT OOM in Task 5 already taught: a forked JVM or a browser sizes
+          // itself from the limit, so a bigger limit buys bigger children and never converges.
+          sh 'CI=true npm run e2e -- --workers=1'
         }
       }
       post {
