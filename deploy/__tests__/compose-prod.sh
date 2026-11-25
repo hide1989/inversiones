@@ -102,15 +102,22 @@ check "both services cap memory BELOW a ceiling (not merely declare a limit)" $?
 # version of this check had exactly that bug — publishing 5432 left it green, which is worse than
 # having no check, because the file looked verified.
 python3 - <<'PY'
-import os, subprocess, sys
+import os, sys
 try:
-    import yaml  # noqa: F401
+    import yaml
 except ModuleNotFoundError:
-    # Fall back to a text scan of the rendered output, which is still shape-aware: look for a
-    # `published:` key anywhere, since this stack is meant to publish nothing at all.
-    sys.exit(0 if 'published:' not in os.environ['RENDERED'] else 1)
-import yaml
-doc = yaml.safe_load(os.environ['RENDERED'])
+    # Deliberately a FAILURE, not a fallback. The previous version degraded to
+    # `sys.exit(0 if 'published:' not in RENDERED else 1)`, which passes on an EMPTY string — so a
+    # check whose input never arrived reported a pass for a config it had not seen. That is the
+    # same defect this very check was rewritten to fix, reintroduced in its own error handler.
+    # Install PyYAML (jenkins/Dockerfile does) rather than letting the guard weaken itself.
+    sys.exit('PyYAML is required for this check; refusing to report a pass without it')
+
+rendered = os.environ.get('RENDERED') or ''
+if not rendered.strip():
+    sys.exit('the rendered compose output is empty; refusing to report a pass')
+
+doc = yaml.safe_load(rendered)
 offenders = [
     name for name, svc in (doc.get('services') or {}).items()
     if (svc or {}).get('ports')
@@ -133,7 +140,10 @@ check "traefik.enable is TRUE (Traefik runs with exposedbydefault=false)" $?
 python3 - <<'NETPY'
 import os, sys, yaml
 
-doc = yaml.safe_load(os.environ['RENDERED']) or {}
+rendered = os.environ.get('RENDERED') or ''
+if not rendered.strip():
+    sys.exit('the rendered compose output is empty; refusing to report a pass')
+doc = yaml.safe_load(rendered) or {}
 problems = []
 networks = doc.get('networks') or {}
 name = next((n for n, cfg in networks.items()

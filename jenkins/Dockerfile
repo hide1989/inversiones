@@ -21,6 +21,12 @@
 #
 # python3 is here because the pipeline asserts on vitest's JSON report with it, rather than parsing
 # terminal output that carries ANSI escapes inside the phrase it would have to match.
+#
+# python3-yaml is here because deploy/__tests__/compose-prod.sh parses the RENDERED compose output
+# rather than grepping the source file: `- "5432:5432"` becomes a mapping with target/published
+# keys, so a regex for the short form can never match and the check can never fail. Without PyYAML
+# those checks now FAIL rather than fall back to a weaker text scan, so the package is required,
+# not optional. The Guards stage caught its absence in 0 seconds on build #16.
 FROM jenkins/jenkins:lts-jdk25
 
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
@@ -37,7 +43,7 @@ USER root
 ARG NODE_MAJOR=22
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl gnupg python3; \
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg python3 python3-yaml; \
     install -m 0755 -d /etc/apt/keyrings; \
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg; \
