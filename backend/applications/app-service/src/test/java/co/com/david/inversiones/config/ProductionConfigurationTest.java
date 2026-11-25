@@ -166,4 +166,35 @@ class ProductionConfigurationTest {
         assertThat(environment.getProperty("inversiones.security.jwt-secret"))
                 .isEqualTo(THIRTY_TWO_BYTE_SECRET);
     }
+
+    @Test
+    @DisplayName("a missing SEED_PASSWORD_HASH fails to resolve, naming the variable")
+    void missingSeedPasswordHashFailsToResolveAndNamesTheVariable() {
+        // Migration V2 seeds the user `david` with the BCrypt digest of a password written in
+        // plain sight in this repository, and it runs under every profile because Flyway has no
+        // notion of one. Until V4 that meant a deployed instance was born with a published
+        // credential, and the pipeline's smoke test depended on it still working — so rotating it
+        // turned CI red, which is a guard pointing the wrong way.
+        //
+        // V4 rewrites the hash from a Flyway placeholder. This assertion is what makes the
+        // placeholder a REQUIREMENT outside `local` rather than a nicety: with no value, Flyway
+        // fails at startup naming the variable, instead of leaving the committed hash in place and
+        // reporting a healthy deploy.
+        ConfigurableEnvironment environment = environmentWith(Map.of(), DEPLOYED_PROFILE);
+
+        assertThatThrownBy(() -> environment.getProperty("spring.flyway.placeholders.seed_password_hash"))
+                .as("a deployment that forgets the hash must fail, not keep the committed one")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SEED_PASSWORD_HASH");
+    }
+
+    @Test
+    @DisplayName("the local profile supplies the committed hash, so local work needs no setup")
+    void localProfileSuppliesTheCommittedSeedHash() {
+        ConfigurableEnvironment environment = environmentWith(Map.of(), "local");
+
+        assertThat(environment.getProperty("spring.flyway.placeholders.seed_password_hash"))
+                .as("`./gradlew bootRun` and the dev compose stack must keep working unchanged")
+                .isEqualTo("$2a$10$8h4HIXTmlqYgxHHTXt9vi.Tg1neXgrGmgZcv06pcahzg2CztxVUZ6");
+    }
 }

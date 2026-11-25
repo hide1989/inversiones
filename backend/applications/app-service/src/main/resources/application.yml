@@ -34,6 +34,19 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    placeholders:
+      # The BCrypt hash V4 writes over the seeded user's password.
+      #
+      # NO DEFAULT, on purpose, and for the same reason as jwt-secret below: migration V2 seeds
+      # `david` with a digest of a password published in this repository, and Flyway has no notion
+      # of a profile, so that credential was live under every profile including prod. A default
+      # here — any default — would mean a deploy that forgets this variable comes up with the
+      # published password and reports itself healthy.
+      #
+      # Generate it on the host that will run the stack, never on a laptop:
+      #   docker run --rm httpd:2-alpine htpasswd -bnBC 10 "" 'the-new-password' | tr -d ':\n'
+      # The resulting $2y$ prefix is accepted by Spring Security's BCryptPasswordEncoder.
+      seed_password_hash: ${SEED_PASSWORD_HASH}
 
 management:
   health:

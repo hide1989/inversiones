@@ -69,6 +69,31 @@ credentials:
               description: "Exact origin of the deployed frontend, no wildcard. Only vps reads it."
           - string:
               scope: GLOBAL
+              id: "inversiones-seed-password-hash"
+              secret: "${SEED_PASSWORD_HASH_CI:-ci-placeholder-seed-hash}"
+              description: "BCrypt hash migration V4 writes over the seeded user. vps only; the
+                default is refused by scripts/assert-not-placeholder.sh."
+          - string:
+              scope: GLOBAL
+              id: "inversiones-smoke-password"
+              # The committed local password ON PURPOSE: the `local` target's database carries the
+              # hash V2 inserted, so the smoke test must use it there. The vps path refuses this
+              # exact value, so it cannot leak into a production check.
+              secret: "${SMOKE_PASSWORD_CI:-Inversiones2026!}"
+              description: "Password the smoke test logs in with. vps requires an override."
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
+              id: "inversiones-vps-ssh"
+              username: "root"
+              description: "Key Jenkins uses to reach the VPS. Its own key, not the developer's."
+              privateKeySource:
+                # A FILE, not an environment variable: an OpenSSH private key is multi-line and
+                # docker-compose's env_file cannot carry one. jenkins/secrets/ is git-ignored and
+                # mounted read-only; see jenkins/docker-compose.yml.
+                directEntry:
+                  privateKey: "${readFile:/var/jenkins_secrets/vps_key}"
+          - string:
+              scope: GLOBAL
               id: "vercel-token"
               secret: "${VERCEL_TOKEN_CI:-replace-me-no-vercel-account-yet}"
               description: "Vercel deploy token. No account exists yet; see docs/runbook-vps.md"

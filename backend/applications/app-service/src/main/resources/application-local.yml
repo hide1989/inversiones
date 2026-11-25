@@ -11,6 +11,13 @@ spring:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:inversiones}
     password: ${POSTGRES_PASSWORD:inversiones_local}
 
+  flyway:
+    placeholders:
+      # Local-only default: the hash V2 already committed, so V4 rewrites the value to itself and
+      # `./gradlew bootRun` plus the dev compose stack keep working with no setup step. The base
+      # file requires this variable precisely so a deployed instance cannot inherit it.
+      seed_password_hash: ${SEED_PASSWORD_HASH:$2a$10$8h4HIXTmlqYgxHHTXt9vi.Tg1neXgrGmgZcv06pcahzg2CztxVUZ6}
+
 inversiones:
   security:
     # Local-only default so `./gradlew bootRun` and the composed stack need no manual setup step.

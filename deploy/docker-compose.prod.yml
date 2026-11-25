@@ -24,9 +24,18 @@
 
 services:
   backend:
-    build:
-      context: ../backend
-      dockerfile: deployment/Dockerfile
+    # NO `build:` SECTION, ON PURPOSE.
+    #
+    # This file is evaluated with DOCKER_HOST pointing at the VPS, so `up --build` would run
+    # Gradle-in-Docker THERE — 2 CPUs, 5.2 GB, no swap, and BuildKit is not covered by the
+    # container mem_limit below. That is the OOM this deployment exists to prevent, triggered by
+    # the deploy itself, with n8n as collateral. It also means the image the pipeline tested would
+    # never be the image that runs.
+    #
+    # The image is built on the CI host, where it is already built and already tested, and
+    # transferred with `docker save | ssh docker load`. deploy/__tests__/compose-prod.sh asserts
+    # this section's ABSENCE, so it cannot come back by habit.
+    #
     # Tagged with the commit so a running container is traceable to the code in it. A floating
     # `latest` makes "which version is deployed?" unanswerable.
     image: inversiones-backend:${IMAGE_TAG:-latest}
@@ -48,6 +57,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-inversiones}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      # The BCrypt hash migration V4 writes over the seeded user's password. Required, because
+      # migration V2 seeds that user with a digest of a password published in this repository and
+      # Flyway has no notion of a profile: without this value a deploy comes up with the published
+      # credential and reports itself healthy.
+      SEED_PASSWORD_HASH: ${SEED_PASSWORD_HASH:?SEED_PASSWORD_HASH is required}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-480}
       # The deployed frontend's exact origin. Wrong or missing, the browser reports an opaque CORS
       # failure and this API logs nothing wrong, so it is required rather than defaulted.

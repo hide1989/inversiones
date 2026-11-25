@@ -75,6 +75,9 @@ services:
     volumes:
       - jenkins_home:/var/jenkins_home
       - ./casc:/var/jenkins_conf:ro
+      # Jenkins' own SSH key for the VPS deploy, read-only. Git-ignored, and a FILE rather than an
+      # environment variable because an OpenSSH key is multi-line and env_file cannot hold one.
+      - ./secrets:/var/jenkins_secrets:ro
       - /var/run/docker.sock:/var/run/docker.sock
       # Read-only: Jenkins clones FROM this path into its own workspace and must never write back
       # to the developer's working tree.

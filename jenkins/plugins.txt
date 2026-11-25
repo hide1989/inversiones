@@ -11,3 +11,4 @@ htmlpublisher
 credentials-binding
 timestamper
 ws-cleanup
+ssh-agent

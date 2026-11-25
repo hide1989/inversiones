@@ -255,8 +255,12 @@ PY
               string(credentialsId: 'inversiones-jwt-secret', variable: 'JWT_SECRET'),
               string(credentialsId: 'inversiones-postgres-password', variable: 'POSTGRES_PASSWORD'),
               string(credentialsId: 'inversiones-backend-host', variable: 'BACKEND_HOST'),
-              string(credentialsId: 'inversiones-allowed-origins', variable: 'SECURITY_ALLOWED_ORIGINS')
+              string(credentialsId: 'inversiones-allowed-origins', variable: 'SECURITY_ALLOWED_ORIGINS'),
+              // Migration V4 rewrites the seeded user's password hash from this value. Without it
+              // the deploy would come up with the credential published in this repository.
+              string(credentialsId: 'inversiones-seed-password-hash', variable: 'SEED_PASSWORD_HASH')
             ]) {
+            sshagent(['inversiones-vps-ssh']) {
               // DOCKER_HOST points at the VPS over SSH: the compose file is evaluated locally and
               // the containers run there. All four variables are required by the file's ${VAR:?}
               // form — including for `down`, since Compose interpolates the whole file before
@@ -269,11 +273,38 @@ PY
                 # the real production values. ${VAR:?} is satisfied by a placeholder, the
                 # placeholder is 36 bytes so the JWT length check passes, and it is not the one
                 # literal string the committed-default guard knows. Nothing else stops it.
-                ./scripts/assert-not-placeholder.sh JWT_SECRET POSTGRES_PASSWORD SECURITY_ALLOWED_ORIGINS
+                ./scripts/assert-not-placeholder.sh JWT_SECRET POSTGRES_PASSWORD SECURITY_ALLOWED_ORIGINS SEED_PASSWORD_HASH
+
+                # The VPS host key, on first contact. Trust-on-first-use: acceptable for a host
+                # whose fingerprint this project does not carry, and the alternative — disabling
+                # host key checking — would accept any machine answering at that address.
+                mkdir -p ~/.ssh && chmod 700 ~/.ssh
+                ssh-keyscan -H 148.230.88.179 >> ~/.ssh/known_hosts 2>/dev/null
+
+                # SHIP the image built in THIS build, which the acceptance stage just tested
+                # against. The alternative, `up --build` over DOCKER_HOST=ssh://, runs
+                # Gradle-in-Docker on the VPS: 2 CPUs, 5.2 GB, no swap, BuildKit outside the
+                # container mem_limit, with n8n as collateral — the OOM this deployment exists to
+                # prevent, triggered by the deploy itself. It would also mean the image that runs
+                # in production is not the image any test ever saw.
+                #
+                # gzip -1: the layers are already compressed, so a higher level costs CPU for
+                # almost nothing. docker save runs BEFORE DOCKER_HOST is exported, or it would
+                # export from the VPS's own daemon rather than this one.
+                docker save inversiones-backend:${IMAGE_TAG} \
+                  | gzip -1 \
+                  | ssh root@148.230.88.179 'gunzip | docker load'
+
                 export DOCKER_HOST=ssh://root@148.230.88.179
-                docker compose -f deploy/docker-compose.prod.yml up -d --build --wait
+                docker compose -f deploy/docker-compose.prod.yml up -d --wait
                 docker compose -f deploy/docker-compose.prod.yml ps
+
+                # The same assertion that exposed seven weeks of acceptance runs against a stale
+                # image, now on the deployed stack: `docker load` is a no-op when the tag already
+                # exists there with different content, and nothing else would notice.
+                ./scripts/assert-backend-image.sh inversiones-backend:${IMAGE_TAG}
               '''
+            }
             }
           }
         }
@@ -304,7 +335,21 @@ PY
           def base = params.DEPLOY_TARGET == 'local'
             ? env.BACKEND_BASE_URL
             : 'https://api.srv1449561.hstgr.cloud'
-          sh "./scripts/smoke.sh ${base}"
+          // SMOKE_PASSWORD comes from a credential, never from the script's committed default.
+          // Until V4 existed, the pipeline's definition of a healthy production deploy was "the
+          // password published in this repository still logs in" — so rotating the credential
+          // turned CI red, which is a guard pointing the wrong way. scripts/smoke.sh already
+          // reads this variable; only the binding was missing.
+          withCredentials([string(credentialsId: 'inversiones-smoke-password', variable: 'SMOKE_PASSWORD')]) {
+            // The credential's CasC default is the committed password on purpose, so `local`
+            // works with no .env. On the vps path that default would turn this stage into "the
+            // password published in this repository still logs in" — the one result that must
+            // fail. Only this path refuses it; `local` is supposed to use it.
+            if (params.DEPLOY_TARGET == 'vps') {
+              sh './scripts/assert-not-placeholder.sh SMOKE_PASSWORD'
+            }
+            sh "./scripts/smoke.sh ${base}"
+          }
         }
       }
     }

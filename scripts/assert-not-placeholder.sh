@@ -31,6 +31,13 @@ PATTERNS=(
   'local-development'
   'changeme'
   'placeholder'
+  # The BCrypt digest migration V2 committed. If SEED_PASSWORD_HASH still carries it, the deploy
+  # would "rotate" the seeded credential to the password published in this repository — a rotation
+  # that changes nothing, reported as done.
+  '$2a$10$8h4hixtmlqygxhhtxt9vi'
+  # The plaintext of that same digest, for SMOKE_PASSWORD. Checked here rather than trusted,
+  # because the credential's default has to stay this value for the `local` target to work.
+  'inversiones2026!'
 )
 
 fail=0

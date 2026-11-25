@@ -35,6 +35,7 @@ rendered="$(
   JWT_SECRET=y \
   BACKEND_HOST=api.example.test \
   SECURITY_ALLOWED_ORIGINS=https://x.vercel.app \
+  SEED_PASSWORD_HASH='$2y$10$rendering-only-not-a-real-hash' \
   docker compose -f "$COMPOSE" config 2>/dev/null
 )"
 check "the file renders with 'docker compose config'" $?
@@ -179,7 +180,7 @@ PY
 check "the Traefik network is referenced as external, never created" $?
 
 # --- Secrets must be required, not defaulted --------------------------------------------------
-for var in POSTGRES_PASSWORD JWT_SECRET SECURITY_ALLOWED_ORIGINS BACKEND_HOST; do
+for var in POSTGRES_PASSWORD JWT_SECRET SECURITY_ALLOWED_ORIGINS BACKEND_HOST SEED_PASSWORD_HASH; do
   grep -qE "\\\$\{$var:\?" "$COMPOSE"
   check "$var is required (\${$var:?...}), so a deploy that forgets it stops" $?
 done
@@ -187,6 +188,16 @@ done
 # --- The image is pinned to a commit, not floating on latest ----------------------------------
 grep -qE 'image:.*\$\{IMAGE_TAG' "$COMPOSE"
 check "the image tag comes from IMAGE_TAG, so a deploy is traceable to a commit" $?
+
+# --- The file cannot build ---------------------------------------------------------------------
+# This compose file is evaluated with DOCKER_HOST pointing at the VPS, so a `build:` section means
+# `docker compose up --build` runs Gradle-in-Docker THERE: 2 CPUs, 5.2 GB, no swap, BuildKit not
+# covered by the container mem_limit — the OOM this whole deployment exists to prevent, triggered
+# by the deploy itself. It also means the image the pipeline tested is never the image that runs.
+# The image is built on the CI host and transferred with `docker save | ssh docker load`, so there
+# is nothing here to build, and the absence is asserted rather than trusted to habit.
+! grep -qE '^[[:space:]]*build:' "$COMPOSE"
+check "NO service declares build: (a --build would compile on the VPS it deploys to)" $?
 
 printf '\n  %d passed, %d failed\n' "$pass" "$fail"
 exit "$fail"

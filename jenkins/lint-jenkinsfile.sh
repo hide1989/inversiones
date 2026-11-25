@@ -75,6 +75,22 @@ need "the pipeline runs the compose guards" -- 'deploy/__tests__/compose-prod\.s
 need "the pipeline runs the Jenkins security guards" -- 'jenkins/__tests__/jenkins-security\.sh'
 need "the pipeline runs the backup guards" -- 'deploy/__tests__/backup-script\.sh'
 
+# --- Layer 1c: the vps deploy block, checked AS A BLOCK ---------------------------------------
+# Scoped to the shell block that sets DOCKER_HOST=ssh://, because a file-wide grep for these
+# strings passes on the acceptance and `local` stages, which legitimately contain some of them --
+# `assert-backend-image.sh` appears there twice already, so a file-wide check for it read green
+# while the vps path had no such call at all. See jenkins/__tests__/vps-deploy-block.py.
+# $JENKINSFILE, not $CODE: the comment stripper above removes `//` to end of line, and
+# `export DOCKER_HOST=ssh://root@...` contains `//` — so the vps block is not even present in the
+# stripped copy, and the checker reported "found 0". It strips shell comments itself instead.
+python3 "$ROOT/jenkins/__tests__/vps-deploy-block.py" "$JENKINSFILE" || fail=$((fail + 1))
+
+need "the smoke test reads its password from a credential, not the committed default" -- 'SMOKE_PASSWORD'
+# The credential's CasC default IS the committed password, so that `local` keeps working without a
+# .env. On the vps path that default would make the smoke test assert "the password published in
+# this repository still logs in" — green for the one reason that must fail.
+need "the vps smoke test refuses the committed password" -- 'assert-not-placeholder\.sh SMOKE_PASSWORD'
+
 # Paths the pipeline publishes must match reality. Checked here rather than trusted, because the
 # plan named a jacoco path that does not exist.
 echo
