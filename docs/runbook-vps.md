@@ -253,6 +253,13 @@ restore from backup if it did.
   public in this repository; it must not be live on the internet. Removing the insert from `V2`
   changes its checksum and Flyway will reject an existing database, so this needs a decision, not
   a quick edit.
+  **Decision taken 2026-11-25 (project owner): keep the seeded user as it is.** This is a personal
+  project with a single user and no public deploy, so the credential being public costs nothing
+  today and the pipeline keeps a working smoke test. The decision is scoped to that premise: it
+  becomes a BLOCKER the moment this reaches a public URL. Whoever does that first deploy owes two
+  changes — a compensating migration that removes or rotates the seeded user outside the `local`
+  profile, and a `SMOKE_PASSWORD` the pipeline reads from a credential instead of defaulting to the
+  committed one.
 - Mutation testing runs but gates nothing: no `mutationThreshold` is configured, and 65% mutation
   coverage against 96.5% line coverage with 208 `NO_COVERAGE` mutations suggests PIT is not
   running over the class set JaCoCo measures. Diagnose that before setting any threshold. PIT is
