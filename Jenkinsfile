@@ -26,14 +26,12 @@ pipeline {
   environment {
     IMAGE_TAG = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(12) : 'dev'}"
 
-    // Pipeline-level, not per-stage: BOTH `Acceptance Tests` and `Deploy Backend` bring up the dev
-    // compose, and setting this on only the first left the second failing with
-    // "Bind for 0.0.0.0:5432 failed: port is already allocated".
-    //
-    // It is needed at all because deploy/.env is git-ignored and therefore absent from the
-    // checkout Jenkins makes, so the compose file falls back to publishing 5432 — which on this
-    // host belongs to an unrelated pgvector container. A high port collides with nothing.
-    POSTGRES_PORT = '55432'
+    // POSTGRES_PORT is deliberately NOT here. It was, and it broke the backend stage:
+    // ProductionConfigurationTest asserts that the local profile still supplies
+    // jdbc:postgresql://localhost:5432/inversiones with nothing set, and a pipeline-level value
+    // leaks into that test's environment. That test was written in Task 1 precisely to guard this
+    // regression, and it caught it four tasks later in a different file. The variable now lives on
+    // the two stages that actually run docker compose.
 
     // The browser, the tests and the smoke script all run INSIDE the Jenkins container, where
     // localhost:8080 is Jenkins itself; the composed backend is a sibling publishing on the HOST.
@@ -117,7 +115,13 @@ PY
 
     stage('Acceptance Tests') {
       environment {
-        // POSTGRES_PORT and BACKEND_BASE_URL come from the pipeline-level environment above.
+        // POSTGRES_PORT is set per-stage, not pipeline-wide: a global value leaks into the
+        // backend tests and fails ProductionConfigurationTest, which asserts the local profile's
+        // defaults with nothing set. It is needed here because deploy/.env is git-ignored and
+        // absent from Jenkins' checkout, so the compose file would publish 5432 — held on this
+        // host by an unrelated pgvector container.
+        POSTGRES_PORT = '55432'
+        // BACKEND_BASE_URL comes from the pipeline-level environment above.
         // These two point the suite's own machinery at the same address: global-setup.ts reads
         // E2E_BACKEND_URL for its precondition check, and the built bundle reads
         // VITE_API_BASE_URL for its API calls. The browser's ORIGIN stays http://localhost:5173
@@ -180,6 +184,11 @@ PY
 
     stage('Deploy Backend') {
       when { expression { params.DEPLOY_TARGET != 'none' } }
+      environment {
+        // Same reason as the Acceptance Tests stage: this stage runs the same compose file, and a
+        // pipeline-level value would break the backend tests.
+        POSTGRES_PORT = '55432'
+      }
       steps {
         script {
           if (params.DEPLOY_TARGET == 'local') {
