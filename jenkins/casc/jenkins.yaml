@@ -11,6 +11,30 @@ jenkins:
         - id: "${JENKINS_ADMIN_ID}"
           password: "${JENKINS_ADMIN_PASSWORD}"
 
+  # WITHOUT THIS BLOCK JENKINS IS WIDE OPEN. A securityRealm only decides who *can* log in; with
+  # no authorizationStrategy, Jenkins keeps its default AuthorizationStrategy.Unsecured, under
+  # which every anonymous caller is an administrator and the admin password above protects nothing.
+  #
+  # This file shipped without it. An earlier version declared `loggedInAuthorizationStrategy`,
+  # which is not a JCasC key — JCasC refused to boot, the key was removed to get the container up,
+  # and the correct spelling below was never put in its place. Measured on the running container
+  # with no credentials at all: GET /credentials/ returned 200, and POST /scriptText with an
+  # anonymous crumb executed Groovy and returned its output. That container mounts
+  # /var/run/docker.sock, so it was remote code execution against the Docker daemon that also runs
+  # n8n — this application's only data source.
+  #
+  # Worth recording how it was nearly missed twice: an unauthenticated POST to /scriptText answers
+  # 403, which reads exactly like authorization working. That is the CSRF crumb check, and Jenkins
+  # hands a crumb to anonymous callers for the asking.
+  #
+  # allowAnonymousRead stays false: with it true, build consoles and job config are world-readable,
+  # and this project's consoles carry environment values.
+  #
+  # jenkins/__tests__/jenkins-security.sh asserts all of this, in the file and on the wire.
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
 unclassified:
   location:
     url: "http://localhost:8090/"

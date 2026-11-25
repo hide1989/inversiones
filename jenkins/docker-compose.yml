@@ -64,9 +64,13 @@ services:
       # host.docker.internal is the address that works: verified to resolve to 192.168.65.254 from
       # inside this container and to accept a connection, where 172.17.0.1 has no name at all.
       TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    # Bound to LOOPBACK, not 0.0.0.0. This container mounts the host's Docker socket, so reaching
+    # its HTTP port is reaching the Docker daemon that also runs n8n. Published on all interfaces
+    # it was available to anyone on the same network — a cafe, a shared office, a guest VLAN.
+    # Use an SSH tunnel to reach it from another machine, never a wider bind.
     ports:
-      - "${JENKINS_PORT:-8090}:8080"
-      - "50000:50000"
+      - "127.0.0.1:${JENKINS_PORT:-8090}:8080"
+      - "127.0.0.1:50000:50000"
     volumes:
       - jenkins_home:/var/jenkins_home
       - ./casc:/var/jenkins_conf:ro

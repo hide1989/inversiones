@@ -131,6 +131,12 @@ PY
       }
       steps {
         sh 'docker compose -f deploy/docker-compose.dev.yml up -d --wait'
+        // The stack must be running the image Docker Build just produced. For seven weeks it was
+        // not: the dev compose named no image, so Compose invented inversiones-dev-backend:latest
+        // and `up` reused it because `up` builds only when an image is ABSENT, never when it is
+        // stale. Every Playwright run and every smoke test in this pipeline was therefore talking
+        // to a binary from 2026-10-08. This line is what makes that a build failure.
+        sh './scripts/assert-backend-image.sh inversiones-backend:${IMAGE_TAG}'
         dir('backend') {
           // The Cucumber suite uses Testcontainers and WireMock, so it does not need the stack
           // above — that is brought up for the Playwright flows, which talk to the real API.
@@ -202,6 +208,7 @@ PY
               // the dev stack: it validates the pipeline, not the production topology.
               sh '''
                 docker compose -f deploy/docker-compose.dev.yml up -d --wait
+                ./scripts/assert-backend-image.sh inversiones-backend:${IMAGE_TAG}
                 docker compose -f deploy/docker-compose.dev.yml ps
               '''
             }
@@ -217,6 +224,14 @@ PY
               // form — including for `down`, since Compose interpolates the whole file before
               // doing anything.
               sh '''
+                # Refuse to sign production tokens with a secret printed in this repository. Every
+                # CasC credential carries a :-default so Jenkins boots on a laptop with no .env,
+                # and because the prod compose file is evaluated HERE — not on the VPS, whose
+                # /docker/inversiones/.env this path never reads — those defaults WOULD have been
+                # the real production values. ${VAR:?} is satisfied by a placeholder, the
+                # placeholder is 36 bytes so the JWT length check passes, and it is not the one
+                # literal string the committed-default guard knows. Nothing else stops it.
+                ./scripts/assert-not-placeholder.sh JWT_SECRET POSTGRES_PASSWORD SECURITY_ALLOWED_ORIGINS
                 export DOCKER_HOST=ssh://root@148.230.88.179
                 docker compose -f deploy/docker-compose.prod.yml up -d --build --wait
                 docker compose -f deploy/docker-compose.prod.yml ps

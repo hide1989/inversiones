@@ -19,6 +19,21 @@ services:
       retries: 10
 
   backend:
+    # The image NAME matters, and its absence here cost this project seven weeks of acceptance
+    # evidence. With only a `build:` section, Compose names the image after the project
+    # (inversiones-dev-backend:latest) — a name the Docker Build stage never produces — and
+    # `docker compose up` builds only when the image is ABSENT, never when it is stale. So CI
+    # built inversiones-backend:<sha> and then tested a container from an image dated 2026-10-08.
+    #
+    # Naming it explicitly makes the pipeline reuse exactly what it just built: Jenkins sets
+    # IMAGE_TAG to the commit sha, so this resolves to the image the Docker Build stage tagged.
+    # Locally IMAGE_TAG is unset and this is inversiones-backend:dev, built on first use — so run
+    # `docker compose -f deploy/docker-compose.dev.yml up -d --build` after changing backend code,
+    # because compose will NOT notice the source changed.
+    #
+    # scripts/assert-backend-image.sh is what keeps this honest; the pipeline calls it after
+    # every `up`, so a container from the wrong image fails the build instead of passing it.
+    image: inversiones-backend:${IMAGE_TAG:-dev}
     build:
       context: ../backend
       dockerfile: deployment/Dockerfile

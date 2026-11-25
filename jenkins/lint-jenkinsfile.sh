@@ -61,6 +61,13 @@ need "the image is tagged with the commit, not latest" -- 'inversiones-backend:\
 # like a passing report.
 need "published reports are required to exist" -- 'allowMissing: false'
 need "the merged JaCoCo path is the one that exists" -- 'reports/jacocoMergedReport/html'
+# For seven weeks the acceptance and smoke stages tested an image dated 2026-10-08, because the dev
+# compose named no image and `docker compose up` rebuilds only when one is ABSENT. Without this
+# assertion the whole Playwright suite is a test that cannot fail.
+need "the tested stack is asserted to run the image just built" -- 'assert-backend-image\.sh'
+# The CasC credentials default to values committed in this repository, and the prod compose file is
+# evaluated on the Jenkins side, so without this the vps branch would deploy with them.
+need "the vps deploy refuses repository-sourced secrets" -- 'assert-not-placeholder\.sh'
 
 # Paths the pipeline publishes must match reality. Checked here rather than trusted, because the
 # plan named a jacoco path that does not exist.
@@ -85,13 +92,42 @@ if ! curl -sf "$JENKINS_URL/login" >/dev/null 2>&1; then
 fi
 
 echo "Layer 2 — Jenkins' own declarative linter at $JENKINS_URL"
-CRUMB="$(curl -sf "$JENKINS_URL/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)" 2>/dev/null || true)"
-if [ -n "$CRUMB" ]; then
-  RESULT="$(curl -sf -X POST -H "$CRUMB" -F "jenkinsfile=<$JENKINSFILE" "$JENKINS_URL/pipeline-model-converter/validate" 2>&1)"
-else
-  RESULT="$(curl -sf -X POST -F "jenkinsfile=<$JENKINSFILE" "$JENKINS_URL/pipeline-model-converter/validate" 2>&1)"
+
+# Layer 2 AUTHENTICATES. It did not, and it worked anyway — because Jenkins was configured with no
+# authorizationStrategy and answered anonymous callers as an administrator. Closing that hole broke
+# this layer, which is the correct direction: a linter that only works against an unsecured Jenkins
+# is not a linter you want working.
+#
+# Credentials come from jenkins/.env (git-ignored, the same file that starts the container) or from
+# JENKINS_USER / JENKINS_PASSWORD in the environment. No credential is ever echoed here.
+ENV_FILE="$ROOT/jenkins/.env"
+if [ -z "${JENKINS_USER:-}" ] && [ -f "$ENV_FILE" ]; then
+  # Anchored to the start of the line: an earlier version of this grep matched the template's
+  # explanatory COMMENT and read a 97-character sentence as the password.
+  JENKINS_USER="$(grep -E '^JENKINS_ADMIN_ID=' "$ENV_FILE" | cut -d= -f2-)"
+  JENKINS_PASSWORD="$(grep -E '^JENKINS_ADMIN_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
 fi
-echo "  $RESULT"
+JENKINS_USER="${JENKINS_USER:-admin}"
+
+if [ -z "${JENKINS_PASSWORD:-}" ]; then
+  echo "  SKIPPED: no credentials. Set JENKINS_USER/JENKINS_PASSWORD, or keep jenkins/.env."
+  echo "  Layer 2 cannot run against a secured Jenkins without them."
+  fail=$((fail + 1))
+  exit "$fail"
+fi
+
+JAR="$(mktemp)"
+trap 'rm -f "$CODE" "$JAR"' EXIT
+CRUMB="$(curl -sf -c "$JAR" -u "$JENKINS_USER:$JENKINS_PASSWORD" \
+  "$JENKINS_URL/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)" 2>/dev/null || true)"
+if [ -z "$CRUMB" ]; then
+  echo "  FAIL  could not obtain a CSRF crumb — credentials rejected, or Jenkins is not ready"
+  fail=$((fail + 1))
+  exit "$fail"
+fi
+RESULT="$(curl -sf -X POST -b "$JAR" -c "$JAR" -u "$JENKINS_USER:$JENKINS_PASSWORD" -H "$CRUMB" \
+  -F "jenkinsfile=<$JENKINSFILE" "$JENKINS_URL/pipeline-model-converter/validate" 2>&1)"
+echo "  ${RESULT:-(empty response)}"
 grep -q "successfully validated" <<<"$RESULT" || fail=$((fail + 1))
 
 exit "$fail"
