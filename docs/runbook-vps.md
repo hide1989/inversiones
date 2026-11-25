@@ -7,7 +7,7 @@ done deliberately, once, by a person. Everything that can be automated is alread
 
 | | Status |
 |---|---|
-| The pipeline, end to end, `DEPLOY_TARGET=local` | **Verified.** Jenkins build #12 on commit `ada6a9d`: nine stages, SUCCESS in 309s, including Cucumber and 41 Playwright cases across two browsers, and a smoke test against a real backend. |
+| The pipeline, end to end, `DEPLOY_TARGET=local` | **Verified.** Jenkins build #17 on commit `91e8b57`: ten stages, SUCCESS in 776s — the Guards suite (13 checks), Cucumber (11 scenarios, 66 steps), 41 Playwright cases, and a 4/4 smoke test. Build #17 is the first run whose acceptance evidence is trustworthy: until `scripts/assert-backend-image.sh` existed, the dev compose named no image and `docker compose up` reused a stale one, so every earlier run — build #12 included — tested a backend binary dated 2026-10-08. The console of #17 reads `ok: inversiones-backend is running inversiones-backend:91e8b574b356` and `41 passed`, which is the pairing that makes the number mean something. |
 | `deploy/docker-compose.prod.yml` | Linted, reviewed, and checked by `deploy/__tests__/compose-prod.sh` (14 checks). **Never run** — it needs the VPS `.env`. |
 | `frontend/vercel.json` | Checked by 6 unit tests. **Never deployed** — no Vercel account exists. |
 | The `vps` deploy path in `Jenkinsfile` | Written and linted. Skipped by its own `when` guard until a Vercel token exists, which is why build #12 shows `Deploy Frontend` as NOT_EXECUTED rather than green. |
@@ -238,6 +238,21 @@ restore from backup if it did.
 - Caffeine's `@Cacheable` does not coalesce concurrent loaders, so a cold cache under load lets
   every request through to n8n at once. Measured: 524 failed calls, three circuit breakers opened,
   p99 from 61 ms to 30,514 ms. Unfixed, recorded.
+- The `vps` deploy runs `docker compose up --build` over `DOCKER_HOST=ssh://`, so the full
+  Gradle-in-Docker build would run ON the VPS: 2 CPUs, 5.2 GB available, no swap, and BuildKit is
+  not covered by the container `mem_limit`. That is the OOM this whole deployment plan exists to
+  prevent, triggered by the deploy itself — and it also means the image the pipeline tested is
+  never the image that runs. The fix is a registry (GHCR with a token is enough) and
+  `--pull always` with no `--build`; `docker save | ssh docker load` works without one. Settle this
+  before the first VPS deploy.
+- Migration `V2__seed_reference_data.sql` inserts the user `david` with the bcrypt hash of
+  `Inversiones2026!` unconditionally, and `spring.flyway.enabled` is true in the base
+  `application.yml`, so it runs under the `prod` profile too. `scripts/smoke.sh` also defaults to
+  that credential, which means the pipeline's definition of a healthy production deploy is "the
+  published password still logs in" — rotating it turns CI red. That credential is deliberately
+  public in this repository; it must not be live on the internet. Removing the insert from `V2`
+  changes its checksum and Flyway will reject an existing database, so this needs a decision, not
+  a quick edit.
 - Mutation testing runs but gates nothing: no `mutationThreshold` is configured, and 65% mutation
   coverage against 96.5% line coverage with 208 `NO_COVERAGE` mutations suggests PIT is not
   running over the class set JaCoCo measures. Diagnose that before setting any threshold. PIT is
