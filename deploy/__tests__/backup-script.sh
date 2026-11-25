@@ -94,8 +94,18 @@ for i in 1 2 3 4; do
 done
 CONTAINER="$CONTAINER" DEST="$TMP/e" KEEP=2 "$SCRIPT" >/dev/null 2>&1
 check "KEEP=2 leaves two backups" 2 "$(ls -1 "$TMP/e"/inversiones-*.sql.gz | wc -l | tr -d ' ')"
-check "the newest survives rotation" 0 \
-  "$(ls -1t "$TMP/e"/inversiones-*.sql.gz | head -1 | grep -qv '20260101'; echo $?)"
+# Assert the surviving SET, not "the newest is not the oldest". The first version of this check
+# was `ls -1t | head -1 | grep -qv '20260101'`, which cannot fail: the newest file by mtime is
+# always the dump the script just wrote, and its name carries today's date. Deleting the rotation
+# logic entirely left it green.
+#
+# What rotation must do is keep the newest KEEP by TIME. With four planted backups dated 0101-0104
+# and KEEP=2, the survivors are the new dump and 20260104 — and 0101, 0102, 0103 must be gone.
+survivors="$(cd "$TMP/e" && ls -1 inversiones-*.sql.gz | sed 's/inversiones-//;s/\.sql\.gz//' | sort | tr '\n' ' ')"
+check "rotation keeps 20260104 (the newest planted backup)" 0 \
+  "$(grep -q '20260104' <<<"$survivors"; echo $?)"
+check "rotation deleted 20260101, 20260102 and 20260103" 0 \
+  "$(grep -qvE '2026010[123]' <<<"$survivors"; echo $?)"
 
 echo
 if [ "$fail" -eq 0 ]; then echo "all checks passed"; else echo "$fail check(s) failed"; fi

@@ -176,6 +176,23 @@ A healthy run prints `backup ok:` with the size and how many are kept. A rejecte
 leaves the file as `*.suspect`, and exits non-zero — so cron will mail it rather than failing
 silently. The first run says "no previous backup to compare", which is expected exactly once.
 
+### This retention is not disaster recovery
+
+Both the database and all 14 dumps live on the same disk, on the same machine. That protects
+against operator error — a bad migration, a wrong `DELETE` — and against nothing else. A disk
+failure or a lost VPS takes the database and every backup of it together.
+
+Copy them somewhere else. Any of these is enough, and the first is the least work:
+
+```bash
+# From the Mac, nightly or by hand. --delete is deliberately absent: a dump deleted on the VPS by
+# rotation should not disappear from the archive too.
+rsync -az root@148.230.88.179:/var/backups/inversiones/ ~/Backups/inversiones/
+```
+
+Or `rclone` to any object store from the VPS itself, added to the same cron entry as the dump. Until
+one of those exists, treat the backup as protection against mistakes, not against loss.
+
 ### Prove a restore works
 
 A backup nobody has restored is a hypothesis. Do this once now, and again after any Postgres

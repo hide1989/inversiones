@@ -17,6 +17,9 @@ inversiones:
     # This value is intentionally public (it is committed to this repository); JwtCodecConfig
     # refuses to accept it outside the "local" profile, so it can never become a real signing key.
     jwt-secret: ${JWT_SECRET:local-development-secret-change-me-32bytes}
+    # The Vite dev server Plan 3 runs. Local-only, like the secret above: the base file now
+    # requires this variable so a deployed instance cannot inherit a developer's origin.
+    allowed-origins: ${SECURITY_ALLOWED_ORIGINS:http://localhost:5173}
 
 logging:
   level:

@@ -166,4 +166,10 @@ inversiones:
     jwt-expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
     # Exact origins allowed to call this API cross-origin; no wildcard. Defaults to the Vite dev
     # server Plan 3 runs.
-    allowed-origins: ${SECURITY_ALLOWED_ORIGINS:http://localhost:5173}
+    # No default, for the same reason jwt-secret has none: a development default in THIS file is
+    # visible to every profile. It used to read ${SECURITY_ALLOWED_ORIGINS:http://localhost:5173},
+    # so any deployed path that did not come through docker-compose.prod.yml booted with CORS
+    # allowing only the Vite dev server — and that failure surfaces as an opaque CORS error in the
+    # browser with nothing wrong in the API logs, which is the most expensive way to find out.
+    # The local default lives in application-local.yml.
+    allowed-origins: ${SECURITY_ALLOWED_ORIGINS}

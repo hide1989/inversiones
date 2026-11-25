@@ -100,6 +100,26 @@ class ProductionConfigurationTest {
     }
 
     @Test
+    @DisplayName("a missing SECURITY_ALLOWED_ORIGINS fails to resolve, naming the variable")
+    void missingAllowedOriginsFailsToResolveAndNamesTheVariable() {
+        // The plan assigned this failure mode to Task 1 and Task 1 did not cover it: the base
+        // application.yml carried ${SECURITY_ALLOWED_ORIGINS:http://localhost:5173}, a development
+        // default visible to EVERY profile — the exact pattern the file's own jwt-secret comment
+        // argues against two lines above it.
+        //
+        // What that costs is the hardest kind of failure to diagnose. Any path that does not go
+        // through docker-compose.prod.yml — running the image by hand, a hotfix `docker run`, a
+        // future host — boots with CORS allowing only http://localhost:5173. The browser then
+        // reports an opaque CORS error, and the API logs nothing wrong at any level, because
+        // nothing IS wrong as far as the backend knows. Failing at startup is far cheaper.
+        ConfigurableEnvironment environment = environmentWith(Map.of(), DEPLOYED_PROFILE);
+
+        assertThatThrownBy(() -> environment.getProperty("inversiones.security.allowed-origins"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SECURITY_ALLOWED_ORIGINS");
+    }
+
+    @Test
     @DisplayName("allowed origins binds a comma-separated list, so one variable carries several hosts")
     void allowedOriginsBindsACommaSeparatedList() {
         ConfigurableEnvironment environment = environmentWith(

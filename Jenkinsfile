@@ -48,6 +48,25 @@ pipeline {
       }
     }
 
+    // Runs the repository's own guard suites. They existed before this stage and nothing invoked
+    // them: the production-Postgres-port check — the highest-value assertion in the whole
+    // repository, and the one proven to catch a database exposed to the internet — ran only when
+    // somebody remembered to type it. A guard that runs by memory is on its way back to being
+    // decoration, which is how every "check that cannot fail" in this project started.
+    //
+    // First, deliberately, so a configuration regression fails in seconds rather than after the
+    // 184-second acceptance stage. backup-script.sh is not here: it needs a migrated Postgres, so
+    // it runs inside Acceptance Tests where one is already up.
+    stage('Guards') {
+      steps {
+        sh 'bash deploy/__tests__/compose-prod.sh'
+        sh 'bash jenkins/__tests__/jenkins-security.sh'
+        // Layer 1 only: Jenkins is not reachable at localhost:8090 from inside this container, so
+        // the declarative-linter layer skips. Layer 1 is what catches a deleted pipeline guard.
+        sh 'bash jenkins/lint-jenkinsfile.sh'
+      }
+    }
+
     stage('Backend: Build & Test') {
       steps {
         dir('backend') {
@@ -97,6 +116,13 @@ report = json.load(open('.vitest/report.json'))
 print(f"suites={report.get('numTotalTestSuites')} "
       f"failedSuites={report.get('numFailedTestSuites')} "
       f"tests={report.get('numTotalTests')} failed={report.get('numFailedTests')}")
+# A FLOOR, not only a failure count. vitest.config.ts sets passWithNoTests: true, so an empty
+# run reports success=true with every failure counter at zero and this stage would go green
+# having executed nothing - the exact failure mode this pipeline's Review Focus names. A moved
+# src/, an edited test.exclude, or a stray --project does that silently.
+total = report.get('numTotalTests') or 0
+if total < 150:
+    sys.exit(f'vitest ran only {total} tests; the suite has ~167, so something was excluded')
 if not report.get('success') or report.get('numFailedTestSuites') or report.get('numFailedTests'):
     sys.exit('vitest reported failures')
 PY
@@ -137,6 +163,8 @@ PY
         // stale. Every Playwright run and every smoke test in this pipeline was therefore talking
         // to a binary from 2026-10-08. This line is what makes that a build failure.
         sh './scripts/assert-backend-image.sh inversiones-backend:${IMAGE_TAG}'
+        // Postgres is up and migrated here, which is the only place the backup guards can run.
+        sh 'bash deploy/__tests__/backup-script.sh'
         dir('backend') {
           // The Cucumber suite uses Testcontainers and WireMock, so it does not need the stack
           // above — that is brought up for the Playwright flows, which talk to the real API.

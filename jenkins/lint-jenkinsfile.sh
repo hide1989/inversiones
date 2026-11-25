@@ -26,7 +26,8 @@ fail=0
 # that command names the flag in prose. A linter validating its own documentation is worse than no
 # linter: the file looks verified.
 CODE="$(mktemp)"
-trap 'rm -f "$CODE"' EXIT
+FAILMARK="$(mktemp)"
+trap 'rm -f "$CODE" "$FAILMARK"' EXIT
 # Strip /* */ blocks first, then // to end of line. Crude for Groovy in general — it would also
 # cut a // inside a string literal — but this file has no such string, and erring toward removal
 # is the safe direction here: a stripped-away command fails its check loudly.
@@ -68,21 +69,58 @@ need "the tested stack is asserted to run the image just built" -- 'assert-backe
 # The CasC credentials default to values committed in this repository, and the prod compose file is
 # evaluated on the Jenkins side, so without this the vps branch would deploy with them.
 need "the vps deploy refuses repository-sourced secrets" -- 'assert-not-placeholder\.sh'
+# These suites existed and nothing ran them. The production-Postgres-port check is the highest-value
+# assertion in this repository and it ran only when somebody typed it by hand.
+need "the pipeline runs the compose guards" -- 'deploy/__tests__/compose-prod\.sh'
+need "the pipeline runs the Jenkins security guards" -- 'jenkins/__tests__/jenkins-security\.sh'
+need "the pipeline runs the backup guards" -- 'deploy/__tests__/backup-script\.sh'
 
 # Paths the pipeline publishes must match reality. Checked here rather than trusted, because the
 # plan named a jacoco path that does not exist.
 echo
-echo "Layer 1b — every published report path exists after a real build"
-for p in \
-  "backend/build/reports/jacocoMergedReport/html/index.html" \
-  "backend/applications/app-service/build/reports/cucumber/report.html"
-do
-  if [ -f "$ROOT/$p" ]; then
-    printf '  ok    %s\n' "$p"
-  else
-    printf '  WARN  %s not present — run the build first, or the path is wrong\n' "$p"
+echo "Layer 1b — every path the pipeline publishes must exist after a real build"
+# This layer used to print WARN and never touch $fail, while the Task 4 ruling claimed "the linter
+# asserts each path exists on disk". It did not. It also checked two of the three publishHTML
+# targets and hardcoded them, so moving a path in the Jenkinsfile left the linter checking the old
+# location and still passing.
+#
+# The paths are now READ OUT of the Jenkinsfile, so they cannot drift from it, and a missing one
+# fails. The skip is narrow and explicit: no build output at all means "you have not built yet",
+# which is a different statement from "the path is wrong".
+# A while-read loop, not `mapfile`: mapfile is bash 4+ and macOS ships bash 3.2 as /bin/bash.
+# Worse than failing, it failed QUIETLY — `mapfile: command not found` followed by an unbound
+# variable, printed to stderr while the suite carried on and reported nothing. A portability bug
+# that turns a check off is the same defect this layer was rewritten to fix.
+REPORT_DIRS=""
+while IFS= read -r line; do
+  REPORT_DIRS="$REPORT_DIRS$line
+"
+done < <(grep -oE "reportDir:\s*'[^']+'" "$CODE" | sed "s/.*'\(.*\)'/\1/")
+REPORT_COUNT="$(printf '%s' "$REPORT_DIRS" | grep -c . || true)"
+
+if [ "$REPORT_COUNT" -eq 0 ]; then
+  printf '  FAIL  no reportDir found in the Jenkinsfile — publishHTML was removed?\n'
+  fail=$((fail + 1))
+elif [ ! -d "$ROOT/backend/build" ] && [ ! -d "$ROOT/frontend/node_modules" ]; then
+  printf '  SKIP  nothing has been built in this tree yet; %s published path(s) unchecked\n' \
+    "$REPORT_COUNT"
+else
+  printf '%s' "$REPORT_DIRS" | while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    if [ -e "$ROOT/$d" ]; then
+      printf '  ok    %s\n' "$d"
+    else
+      printf '  FAIL  %s does not exist — publishHTML has allowMissing:false and will fail the build\n' "$d"
+      echo "x" >> "$FAILMARK"
+    fi
+  done
+  # The loop above runs in a subshell (it is on the right of a pipe), so `fail=$((fail+1))` inside
+  # it would be discarded — a counter that increments and vanishes is a check that cannot fail.
+  # The marker file is how the count crosses back out.
+  if [ -s "$FAILMARK" ]; then
+    fail=$((fail + $(grep -c . "$FAILMARK")))
   fi
-done
+fi
 
 echo
 if ! curl -sf "$JENKINS_URL/login" >/dev/null 2>&1; then

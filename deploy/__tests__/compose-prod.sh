@@ -45,22 +45,53 @@ export RENDERED="$rendered"
 # backend image sets -XX:MaxRAMPercentage=75, which reads the container's cgroup limit — so with no
 # limit the JVM sizes its heap from the HOST's memory and the kernel kills something to reclaim it.
 # The most likely victim is n8n, this application's only source of market data.
-python3 - "$COMPOSE" <<'PY'
+# These assert a CEILING, not that the key exists. `mem_limit: 8g` satisfies "declares a
+# mem_limit" and reproduces the original failure exactly: on a 7.8 GB host the JVM would size its
+# heap near 6 GB and the kernel would kill something. Task 2 had already ruled that a header
+# present with a permissive value is the failure worth catching and that "exists" would pass on
+# it; that standard was not applied here until the final review said so.
+python3 - "$COMPOSE" <<'MEMPY'
 import re, sys
-text = open(sys.argv[1]).read()
-# The backend service block: from "backend:" to the next service at the same indent.
-m = re.search(r'\n  backend:\n(.*?)(?=\n  [a-z_-]+:\n|\nvolumes:|\nnetworks:|\Z)', text, re.S)
-sys.exit(0 if m and re.search(r'^\s+mem_limit:\s*\S+', m.group(1), re.M) else 1)
-PY
-check "the BACKEND service declares mem_limit" $?
 
-python3 - "$COMPOSE" <<'PY'
-import re, sys
+UNITS = {'b': 1, 'k': 1024, 'm': 1024 ** 2, 'g': 1024 ** 3}
+
+
+def to_bytes(raw):
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)\s*([bkmg])?b?', raw.strip().strip('"\'').lower())
+    return None if not m else float(m.group(1)) * UNITS.get(m.group(2) or 'b', 1)
+
+
+def limit_of(text, service):
+    block = re.search(r'\n  %s:\n(.*?)(?=\n  [a-z_-]+:\n|\nvolumes:|\nnetworks:|\Z)' % service,
+                      text, re.S)
+    if not block:
+        return None, 'service not found'
+    lim = re.search(r'^\s+mem_limit:\s*(\S+)', block.group(1), re.M)
+    if not lim:
+        return None, 'no mem_limit declared'
+    value = to_bytes(lim.group(1))
+    return (None, 'unparseable mem_limit %r' % lim.group(1)) if value is None else (value, lim.group(1))
+
+
+# Ceilings, not the declared values: tightening a limit must not fail the test, loosening it must.
+# 1.5 GB for the backend (declared 1g) and 768 MB for Postgres (declared 512m) leave room to adjust
+# without leaving room to reintroduce the bug, and together stay well under the 5.2 GB the VPS has
+# available with n8n's seven unlimited containers to feed.
 text = open(sys.argv[1]).read()
-m = re.search(r'\n  postgres:\n(.*?)(?=\n  [a-z_-]+:\n|\nvolumes:|\nnetworks:|\Z)', text, re.S)
-sys.exit(0 if m and re.search(r'^\s+mem_limit:\s*\S+', m.group(1), re.M) else 1)
-PY
-check "the POSTGRES service declares mem_limit" $?
+failed = 0
+for service, ceiling, pretty in (('backend', 1.5 * 1024 ** 3, '1.5g'),
+                                 ('postgres', 768 * 1024 ** 2, '768m')):
+    value, shown = limit_of(text, service)
+    if value is None:
+        print('      %s: %s' % (service, shown), file=sys.stderr)
+        failed = 1
+    elif value > ceiling:
+        print('      %s: mem_limit %s exceeds the %s ceiling - a heap sized from this would'
+              ' approach the host total' % (service, shown, pretty), file=sys.stderr)
+        failed = 1
+sys.exit(failed)
+MEMPY
+check "both services cap memory BELOW a ceiling (not merely declare a limit)" $?
 
 # --- Postgres must not face the internet ------------------------------------------------------
 # The dev compose publishes 5432 on purpose so pgAdmin can reach it from the host. Carrying that
@@ -93,11 +124,34 @@ check "NO service publishes a host port (the database would face the internet)" 
 # --- Traefik wiring, verified against the VPS's actual Traefik ---------------------------------
 # Checked over SSH: the container is n8n-traefik-1 on network n8n_default, entrypoints web and
 # websecure, cert resolver mytlschallenge, and it runs with exposedbydefault=false.
-grep -q 'traefik.enable' <<<"$rendered"
-check "traefik.enable is set (Traefik runs with exposedbydefault=false)" $?
+# VALUES, not presence: `traefik.enable: "false"` still CONTAINS the string `traefik.enable`, and
+# the `traefik.docker.network` label alone contains `n8n_default` even if the networks: block were
+# wrong. Both would have passed the old greps while leaving the stack unreachable or unrouted.
+grep -qE 'traefik\.enable:\s*.?true' <<<"$rendered"
+check "traefik.enable is TRUE (Traefik runs with exposedbydefault=false)" $?
 
-grep -q 'n8n_default' <<<"$rendered"
-check "the stack joins the existing n8n_default network" $?
+python3 - <<'NETPY'
+import os, sys, yaml
+
+doc = yaml.safe_load(os.environ['RENDERED']) or {}
+problems = []
+networks = doc.get('networks') or {}
+name = next((n for n, cfg in networks.items()
+             if (cfg or {}).get('name') == 'n8n_default' or n == 'n8n_default'), None)
+if not name:
+    problems.append('no top-level network resolves to n8n_default')
+elif not (networks[name] or {}).get('external'):
+    problems.append('n8n_default is not declared external, so compose would create a second,'
+                    ' empty network of its own and Traefik would never see the backend')
+backend = (doc.get('services') or {}).get('backend') or {}
+joined = backend.get('networks') or {}
+if name and name not in (joined if isinstance(joined, (dict, list)) else {}):
+    problems.append('the backend service does not join %s' % name)
+for problem in problems:
+    print('      %s' % problem, file=sys.stderr)
+sys.exit(1 if problems else 0)
+NETPY
+check "the backend JOINS the external n8n_default network (not just names it in a label)" $?
 
 grep -q 'mytlschallenge' <<<"$rendered"
 check "the cert resolver matches the one Traefik runs" $?
