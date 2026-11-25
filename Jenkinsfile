@@ -25,6 +25,21 @@ pipeline {
 
   environment {
     IMAGE_TAG = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(12) : 'dev'}"
+
+    // Pipeline-level, not per-stage: BOTH `Acceptance Tests` and `Deploy Backend` bring up the dev
+    // compose, and setting this on only the first left the second failing with
+    // "Bind for 0.0.0.0:5432 failed: port is already allocated".
+    //
+    // It is needed at all because deploy/.env is git-ignored and therefore absent from the
+    // checkout Jenkins makes, so the compose file falls back to publishing 5432 — which on this
+    // host belongs to an unrelated pgvector container. A high port collides with nothing.
+    POSTGRES_PORT = '55432'
+
+    // The browser, the tests and the smoke script all run INSIDE the Jenkins container, where
+    // localhost:8080 is Jenkins itself; the composed backend is a sibling publishing on the HOST.
+    // This address was verified from inside this container to resolve to 192.168.65.254 and accept
+    // connections, where the bridge gateway 172.17.0.1 has no name at all.
+    BACKEND_BASE_URL = 'http://host.docker.internal:8080'
   }
 
   stages {
@@ -102,21 +117,13 @@ PY
 
     stage('Acceptance Tests') {
       environment {
-        // POSTGRES_PORT is supplied here because deploy/.env is git-ignored and therefore ABSENT
-        // from the checkout Jenkins makes. Without it the dev compose falls back to publishing
-        // 5432, which on this host belongs to an unrelated pgvector container, and the stage dies
-        // instantly with "driver failed programming external connectivity". A high port avoids
-        // collisions with anything a developer happens to be running.
-        POSTGRES_PORT = '55432'
-        // The browser and the tests run INSIDE the Jenkins container, where localhost:8080 is
-        // Jenkins itself — the composed backend is a sibling publishing on the HOST. Both of these
-        // point at the address that actually reaches it, verified from inside this container to
-        // resolve to 192.168.65.254 and accept connections.
-        //
-        // The browser's ORIGIN stays http://localhost:5173 (the preview server, in-container), so
-        // the backend's CORS allowlist needs no change.
-        E2E_BACKEND_URL = 'http://host.docker.internal:8080'
-        VITE_API_BASE_URL = 'http://host.docker.internal:8080'
+        // POSTGRES_PORT and BACKEND_BASE_URL come from the pipeline-level environment above.
+        // These two point the suite's own machinery at the same address: global-setup.ts reads
+        // E2E_BACKEND_URL for its precondition check, and the built bundle reads
+        // VITE_API_BASE_URL for its API calls. The browser's ORIGIN stays http://localhost:5173
+        // (the in-container preview server), so the backend's CORS allowlist needs no change.
+        E2E_BACKEND_URL = "${BACKEND_BASE_URL}"
+        VITE_API_BASE_URL = "${BACKEND_BASE_URL}"
       }
       steps {
         sh 'docker compose -f deploy/docker-compose.dev.yml up -d --wait'
@@ -228,8 +235,12 @@ PY
         script {
           // scripts/smoke.sh takes the base URL as $1 and exits with a distinct code per failed
           // step, including a check that an unauthenticated call is rejected.
+          // For `local`, BACKEND_BASE_URL rather than localhost:8080: this script runs inside the
+          // Jenkins container, where localhost:8080 is Jenkins' own HTTP port and the smoke test
+          // would check Jenkins' health instead of the application's — passing for the wrong
+          // reason, which is worse than failing.
           def base = params.DEPLOY_TARGET == 'local'
-            ? 'http://localhost:8080'
+            ? env.BACKEND_BASE_URL
             : 'https://api.srv1449561.hstgr.cloud'
           sh "./scripts/smoke.sh ${base}"
         }
