@@ -39,6 +39,14 @@ unclassified:
   location:
     url: "http://localhost:8090/"
 
+security:
+  # The git plugin verifies the SSH host key and REFUSES an unknown one, so without this every
+  # checkout from GitHub fails. "Accept on first connection" records github.com's key the first
+  # time and verifies it afterwards — trust-on-first-use, the same posture as the VPS keyscan.
+  # The alternative (no verification) would accept any host answering as github.com.
+  gitHostKeyVerificationConfiguration:
+    sshHostKeyVerificationStrategy: "acceptFirstConnectionStrategy"
+
 credentials:
   system:
     domainCredentials:
@@ -83,6 +91,15 @@ credentials:
               description: "Password the smoke test logs in with. vps requires an override."
           - basicSSHUserPrivateKey:
               scope: GLOBAL
+              id: "inversiones-github-ssh"
+              username: "git"
+              description: "Read-only GitHub deploy key. Jenkins clones with this instead of
+                reading the developer's working tree over file:///repo."
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:/var/jenkins_secrets/github_key}"
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
               id: "inversiones-vps-ssh"
               username: "root"
               description: "Key Jenkins uses to reach the VPS. Its own key, not the developer's."
@@ -110,7 +127,11 @@ jobs:
           cpsScm {
             scm {
               git {
-                remote { url(System.getenv('INVERSIONES_REPO_URL')) }
+                remote {
+                  url(System.getenv('INVERSIONES_REPO_URL'))
+                  // Required now that the URL is a real remote over SSH rather than file:///repo.
+                  credentials('inversiones-github-ssh')
+                }
                 branch(System.getenv('INVERSIONES_BRANCH'))
                 extensions {}
               }

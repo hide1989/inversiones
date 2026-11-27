@@ -3,18 +3,19 @@
 #
 # Port 8090, not 8080: the backend owns 8080 on this machine, and the pipeline starts the backend.
 #
-# The repository is MOUNTED and used as the job's SCM over a file:// URL, because this repository
-# has no git remote — verified, `git remote` lists none. The plan assumed a GitHub URL and a `main`
-# branch; neither exists. The work was developed on feat/backend-domain-core, which was fast-forward
-# merged into master and deleted on 2026-11-25, so master is now the only branch. A local SCM
-# validates the pipeline end to end without needing an account, which is exactly the scope chosen
-# for this plan. docs/runbook-vps.md covers swapping it for a real remote and a webhook.
+# The job's SCM is github.com/hide1989/inversiones over SSH, cloned with a READ-ONLY deploy key
+# (jenkins/secrets/github_key, git-ignored, mounted below). The single branch is master.
 #
-# ALLOW_LOCAL_CHECKOUT is needed because the git plugin refuses a file:// remote by default: a
-# local checkout could reference any path the Jenkins process can read, so it is blocked unless
-# explicitly allowed. Acceptable here and only here — a single-developer CI host whose "local
-# directory" is this project's own repository, mounted read-only. On the VPS the SCM is a real
-# remote and this flag should come back out.
+# Until 2026-11-25 this was the developer's working tree, mounted and used as the SCM over
+# file:///repo, because the repository had no remote. Two things were wrong with it, and both are
+# now gone: it required the git plugin's ALLOW_LOCAL_CHECKOUT escape hatch — which exists because
+# a local checkout can reference any path the Jenkins process can read — and it meant CI built
+# whatever was in the working tree, committed or not. A deploy key cannot push, so a Jenkins
+# compromise cannot rewrite the repository.
+#
+# The trigger is still SCM POLLING (H/15), not a webhook: a laptop has no public address for
+# GitHub to reach. Polling the real remote is the honest substitute — a push is picked up within
+# fifteen minutes. docs/runbook-vps.md covers the webhook, which needs Jenkins on a public host.
 #
 # The Docker socket is mounted because the pipeline builds images and runs compose stacks. That is
 # root-equivalent control of this machine's Docker daemon — acceptable for a single-developer CI
@@ -43,12 +44,14 @@ services:
       JAVA_OPTS: >-
         -Djenkins.install.runSetupWizard=false
         -Dhudson.model.DirectoryBrowserSupport.CSP=
-        -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true
       CASC_JENKINS_CONFIG: /var/jenkins_conf/jenkins.yaml
       JENKINS_ADMIN_ID: ${JENKINS_ADMIN_ID:-admin}
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?set JENKINS_ADMIN_PASSWORD in jenkins/.env}
-      # The mount point below, as a git URL. Overridable so the VPS can point at a real remote.
-      INVERSIONES_REPO_URL: ${INVERSIONES_REPO_URL:-file:///repo}
+      # A real remote over SSH, cloned with the read-only deploy key above. Until 2026-11-25 this
+      # was file:///repo — the developer's own working tree, mounted — which required the git
+      # plugin's ALLOW_LOCAL_CHECKOUT escape hatch (a local checkout can reference any path the
+      # Jenkins process can read) and meant CI tested uncommitted work. Both are gone.
+      INVERSIONES_REPO_URL: ${INVERSIONES_REPO_URL:-git@github.com:hide1989/inversiones.git}
       INVERSIONES_BRANCH: ${INVERSIONES_BRANCH:-master}
       # Git refuses to read a repository owned by another uid ("detected dubious ownership"), and
       # the mounted repo belongs to the host user while this container runs as root. These three
@@ -79,9 +82,6 @@ services:
       # environment variable because an OpenSSH key is multi-line and env_file cannot hold one.
       - ./secrets:/var/jenkins_secrets:ro
       - /var/run/docker.sock:/var/run/docker.sock
-      # Read-only: Jenkins clones FROM this path into its own workspace and must never write back
-      # to the developer's working tree.
-      - ../:/repo:ro
     user: root
 
 volumes:
