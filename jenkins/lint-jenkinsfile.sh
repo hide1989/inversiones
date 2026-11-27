@@ -85,6 +85,14 @@ need "the pipeline runs the backup guards" -- 'deploy/__tests__/backup-script\.s
 # stripped copy, and the checker reported "found 0". It strips shell comments itself instead.
 python3 "$ROOT/jenkins/__tests__/vps-deploy-block.py" "$JENKINSFILE" || fail=$((fail + 1))
 
+# --- Layer 1d: the pipeline-level post block, checked AS A BLOCK --------------------------------
+# `down -v || true` appears twice in this file: in the Acceptance Tests stage, where an immediate
+# teardown is correct, and in the pipeline-level post block, where an immediate teardown destroyed
+# the `local` deploy one second after its smoke test passed (build #22). A file-wide grep cannot
+# tell the two apart, so this check is scoped by indentation. $JENKINSFILE, not $CODE: the checker
+# strips Groovy comments itself.
+python3 "$ROOT/jenkins/__tests__/post-teardown-block.py" "$JENKINSFILE" || fail=$((fail + 1))
+
 need "the smoke test reads its password from a credential, not the committed default" -- 'SMOKE_PASSWORD'
 # The credential's CasC default IS the committed password, so that `local` keeps working without a
 # .env. On the vps path that default would make the smoke test assert "the password published in

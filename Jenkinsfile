@@ -357,7 +357,41 @@ PY
 
   post {
     always {
-      sh 'docker compose -f deploy/docker-compose.dev.yml down -v || true'
+      // This block is the net for a build that dies BETWEEN the acceptance stage's `up` and that
+      // stage's own teardown -- without it, a killed build leaves containers and a volume behind.
+      // It is not a second teardown of the acceptance stack: that stack is already gone by here.
+      //
+      // Until build #22 it was unconditional, and that made `DEPLOY_TARGET=local` a deploy that
+      // destroyed itself. The log, verbatim:
+      //
+      //     05:49:41  ==> SMOKE OK: health, login, authenticated call and security rejection ...
+      //     05:49:42  [Pipeline] { (Declarative: Post Actions)
+      //     05:49:42  + docker compose -f deploy/docker-compose.dev.yml down -v
+      //     05:49:43   Container inversiones-backend  Removing
+      //     05:49:43   Volume inversiones-dev_postgres-data  Removing
+      //
+      // The deploy and its smoke test both passed, and one second later there was nothing left to
+      // look at. A deploy you cannot inspect has not been demonstrated, only asserted.
+      script {
+        if (params.DEPLOY_TARGET == 'local') {
+          // A grace period, then the same teardown. DELAYED, never skipped: skipping it would
+          // leave this host running an old image indefinitely, which is the opposite failure and
+          // one nobody would notice until a later build fought it for port 8080.
+          //
+          // A FOREGROUND sleep, deliberately. Backgrounding it (`nohup ... &` with
+          // JENKINS_NODE_COOKIE=dontKillMe) would end the build in green immediately and is the
+          // obvious-looking choice -- but it arms a `down -v` five minutes in the future with no
+          // lock held. SCM polling runs every 15 minutes, so a build started inside that window
+          // would have ITS acceptance stack destroyed mid-suite by its predecessor's timer, and
+          // the failure would read as a flaky test. Held in the foreground, disableConcurrentBuilds()
+          // keeps the lock for the whole grace period and that race cannot occur. The cost is an
+          // honest one: the build reports as running for five more minutes.
+          echo 'DEPLOY_TARGET=local: leaving the stack up for 5 minutes before tearing it down.'
+          sh 'docker compose -f deploy/docker-compose.dev.yml ps'
+          sh 'sleep 300'
+        }
+        sh 'docker compose -f deploy/docker-compose.dev.yml down -v || true'
+      }
     }
   }
 }
