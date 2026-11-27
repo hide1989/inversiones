@@ -1,0 +1,57 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: perf/scenarios/smoke.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 1 max VUs, 10m30s max duration (incl. graceful stop):
+              * default: 1 iterations shared among 1 VUs (maxDuration: 10m0s, gracefulStop: 30s)
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate==1.00' rate=100.00%
+
+    http_req_failed
+    ✓ 'rate==0.00' rate=0.00%
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 11      5.223589/s
+    checks_succeeded...: 100.00% 11 out of 11
+    checks_failed......: 0.00%   0 out of 11
+
+    ✓ GET /transactions → 200
+    ✓ GET /transactions → body is not empty
+    ✓ GET /signals → 200
+    ✓ GET /signals → body is not empty
+    ✓ GET /portfolio → 200
+    ✓ GET /diversification → 200
+    ✓ GET /portfolio/returns → 200
+    ✓ GET /ai-synthesis → 200
+    ✓ GET /watchlist → 200
+    ✓ GET /earnings → 200
+    ✓ unauthenticated request → 401
+
+    HTTP
+    http_req_duration..............: avg=208.98ms min=11.21ms med=91.39ms max=868.63ms p(90)=508.15ms p(95)=688.39ms
+      { expected_response:true }...: avg=208.98ms min=11.21ms med=91.39ms max=868.63ms p(90)=508.15ms p(95)=688.39ms
+    http_req_failed................: 0.00%  0 out of 10
+    http_reqs......................: 10     4.748717/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.87s    min=1.87s   med=1.87s   max=1.87s    p(90)=1.87s    p(95)=1.87s   
+    iterations.....................: 1      0.474872/s
+    vus............................: 1      min=1       max=1
+    vus_max........................: 1      min=1       max=1
+
+    NETWORK
+    data_received..................: 52 kB  25 kB/s
+    data_sent......................: 2.2 kB 1.1 kB/s
+
+default ✓ [ 100% ] 1 VUs  00m01.9s/10m0s  1/1 shared iters

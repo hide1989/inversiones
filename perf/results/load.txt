@@ -1,0 +1,74 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: perf/scenarios/load.js
+        output: -
+
+     scenarios: (100.00%) 2 scenarios, 200 max VUs, 1m55s max duration (incl. graceful stop):
+              * warmup: 30.00 iterations/s for 25s (maxVUs: 20-100, gracefulStop: 30s)
+              * steady_state: 30.00 iterations/s for 1m0s (maxVUs: 20-100, startTime: 25s, gracefulStop: 30s)
+
+warmup       ✓ [ 100% ] 000/020 VUs  25s           30.00 iters/s
+
+  █ THRESHOLDS 
+
+    checks{scenario:steady_state}
+    ✓ 'rate==1.00' rate=100.00%
+
+    dropped_iterations
+    ✓ 'count<10' count=0
+
+    http_req_duration{name:GET /signals}
+    ✓ 'p(95)<200' p(95)=10.63ms
+
+    http_req_duration{name:GET /transactions}
+    ✓ 'p(95)<200' p(95)=14.42ms
+
+    http_req_duration{scenario:steady_state}
+    ✓ 'p(95)<150' p(95)=13.04ms
+    ✓ 'p(99)<500' p(99)=18.32ms
+
+    http_req_failed{scenario:steady_state}
+    ✓ 'rate==0.00' rate=0.00%
+
+    iterations{scenario:steady_state}
+    ✓ 'count>1750' count=1801
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 5104    59.861453/s
+    checks_succeeded...: 100.00% 5104 out of 5104
+    checks_failed......: 0.00%   0 out of 5104
+
+    ✓ GET /transactions → 200
+    ✓ GET /signals → 200
+
+    HTTP
+    http_req_duration..............: avg=6.5ms   min=2.13ms med=5.23ms  max=248.49ms p(90)=10.66ms p(95)=13.05ms
+      { expected_response:true }...: avg=6.5ms   min=2.13ms med=5.23ms  max=248.49ms p(90)=10.66ms p(95)=13.05ms
+      { name:GET /signals }........: avg=5.75ms  min=2.38ms med=4.95ms  max=71.78ms  p(90)=8.55ms  p(95)=10.63ms
+      { name:GET /transactions }...: avg=7.15ms  min=2.13ms med=5.78ms  max=63.38ms  p(90)=12ms    p(95)=14.42ms
+      { scenario:steady_state }....: avg=6.21ms  min=2.13ms med=4.82ms  max=61.01ms  p(90)=10.71ms p(95)=13.04ms
+    http_req_failed................: 0.00%  0 out of 5105
+      { scenario:steady_state }....: 0.00%  0 out of 3602
+    http_reqs......................: 5105   59.873181/s
+
+    EXECUTION
+    dropped_iterations.............: 0      0/s
+    iteration_duration.............: avg=13.57ms min=5.31ms med=12.29ms max=122.89ms p(90)=20.16ms p(95)=23.7ms 
+    iterations.....................: 2552   29.930727/s
+      { scenario:steady_state }....: 1801   21.122742/s
+    vus............................: 1      min=0         max=2 
+    vus_max........................: 40     min=40        max=40
+
+    NETWORK
+    data_received..................: 33 MB  387 kB/s
+    data_sent......................: 1.2 MB 15 kB/s
+
+warmup       ✓ [ 100% ] 000/020 VUs  25s   30.00 iters/s
+steady_state ✓ [ 100% ] 000/020 VUs  1m0s  30.00 iters/s
